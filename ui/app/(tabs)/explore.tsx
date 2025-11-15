@@ -1,10 +1,12 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ChatInput } from '@/components/home/ChatInput';
 
 type Insight = {
   id: number;
@@ -50,8 +52,15 @@ export default function TipsScreen() {
   const progress = (monthlyGoal.current / monthlyGoal.target) * 100;
 
   return (
-    <ParallaxScrollView>
-      <ThemedView style={styles.screen}>
+    <ThemedView style={styles.root}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ThemedView style={styles.chatInputWrapper}>
+          <ChatInput />
+        </ThemedView>
+      </SafeAreaView>
+
+      <ParallaxScrollView>
+        <ThemedView style={styles.screen}>
         {/* Header */}
         <ThemedView
           lightColor="#4c1d95"
@@ -159,12 +168,24 @@ export default function TipsScreen() {
             <View style={[styles.breakdownFill, { width: '29%' }]} />
           </View>
         </ThemedView>
-      </ThemedView>
-    </ParallaxScrollView>
+        </ThemedView>
+      </ParallaxScrollView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  safeArea: {
+    backgroundColor: 'transparent',
+  },
+  chatInputWrapper: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
   screen: {
     gap: 16,
   },

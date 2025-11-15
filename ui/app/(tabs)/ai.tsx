@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginTop: 40,
+    marginTop: 56,
   },
   chatLabelAI: {
     fontSize: 11,

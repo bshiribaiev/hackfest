@@ -1,0 +1,47 @@
+class Student(BaseModel):
+    name: str
+    email: str
+    avatarcolor: str
+    major: str 
+
+class Budget(BaseModel):
+    user_id: int
+    category: str
+    period: Literal["weekly", "monthly"]
+    limit_amount: float
+
+class BudgetResponse(BaseModel):
+    id: int
+    user_id: int
+    category: str
+    period: str
+    limit_amount: float
+    created_at: str
+
+class LeaderboardSnapshot(BaseModel):
+    user_id: int
+    total_savings: float
+    rank: int
+    snapshot_date: date
+
+class LeaderboardSnapshotResponse(BaseModel):
+    id: int
+    user_id: int
+    total_savings: float
+    rank: int
+    snapshot_date: date
+    created_at: str
+
+class InvestmentTip(BaseModel):
+    tip_text: str
+    category: str | None = None
+    is_active: bool = True
+    display_date: date | None = None
+
+class InvestmentTipResponse(BaseModel):
+    id: int
+    tip_text: str
+    category: str | None
+    is_active: bool
+    display_date: date | None
+    created_at: str

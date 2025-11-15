@@ -1,32 +1,9 @@
-from pydantic import BaseModel
-from datetime import date 
-from typing import Literal, Optional
-
-
 class Student(BaseModel):
     name: str
     email: str
     avatarcolor: str
     major: str 
 
-class Transaction(BaseModel):
-    amount: float
-    category: str
-    merchant: str
-    source: str
-    riskscore: Optional[int] = 10
-    fraudflag: Optional[bool] = False
-    fraudreason: Optional[str] = None
-
-class SpendingStatus(BaseModel):
-    category: str
-    period: str
-    budget_limit: float
-    spent: float
-    remaining: float
-    percentage_used: float
-    status: Literal["under", "near", "over"]
-    
 class Budget(BaseModel):
     user_id: int
     category: str

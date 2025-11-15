@@ -6,59 +6,14 @@ from supabase import create_client, Client
 from pydantic import BaseModel
 import os 
 from dotenv import load_dotenv
+from models import *
 
 load_dotenv()
 
 app = FastAPI()
 supabase: Client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
-class Student(BaseModel):
-    name: str
-    email: str
-    avatarcolor: str
-    major: str 
 
-class Budget(BaseModel):
-    user_id: int
-    category: str
-    period: Literal["weekly", "monthly"]
-    limit_amount: float
-
-class BudgetResponse(BaseModel):
-    id: int
-    user_id: int
-    category: str
-    period: str
-    limit_amount: float
-    created_at: str
-
-class LeaderboardSnapshot(BaseModel):
-    user_id: int
-    total_savings: float
-    rank: int
-    snapshot_date: date
-
-class LeaderboardSnapshotResponse(BaseModel):
-    id: int
-    user_id: int
-    total_savings: float
-    rank: int
-    snapshot_date: date
-    created_at: str
-
-class InvestmentTip(BaseModel):
-    tip_text: str
-    category: str | None = None
-    is_active: bool = True
-    display_date: date | None = None
-
-class InvestmentTipResponse(BaseModel):
-    id: int
-    tip_text: str
-    category: str | None
-    is_active: bool
-    display_date: date | None
-    created_at: str
 
 @app.post("/students/")
 async def create_student(student: Student):
@@ -75,6 +30,14 @@ async def create_student(student: Student):
 @app.get("/students/")
 async def get_students():
     data = supabase.table("students").select("*").execute()
+    return data.data
+
+@app.get("/students/{student_id}")
+async def get_student(student_id: int):
+
+    data = supabase.table("students").select("*").eq("id", student_id).single().execute()
+    if not data.data:
+        raise HTTPException(status_code=404, detail="Student not found ")
     return data.data
 
 @app.get("/students/{student_id}/profile")
@@ -98,4 +61,37 @@ async def get_student_profile(student_id: int):
         "leaderboard_position": leaderboard_response.data[0] if leaderboard_response.data else None
     }
 
-    
+#transaction endpoints 
+@app.post("/transactions/")
+async def create_transaction(user_id: int, transaction: Transaction):
+
+    data = supabase.table("transactions").insert({
+        "student_id": user_id,
+        "amount": transaction.amount,
+        "category": transaction.category,
+        "merchant": transaction.merchant,
+        "source": transaction.source,
+        "riskscore": transaction.riskscore,
+        "fraudflag": transaction.fraudflag,
+        "fraudreason": transaction.fraudreason
+    }).execute()
+
+    return data.data
+
+@app.get("/transactions/{user_id}")
+async def get_transactions(user_id: int, limit: int = 50):
+    """Get all transactions for a user"""
+    data = supabase.table("transactions").select("*").eq(
+        "student_id", user_id
+    ).order("createdat", desc=True).limit(limit).execute()
+    return data.data
+
+@app.get("/transactions/{user_id}/category/{category}")
+async def get_transactions_by_category(user_id: int, category: str):
+    """Get transactions filtered by category"""
+    data = supabase.table("transactions").select("*").eq(
+        "student_id", user_id
+    ).eq("category", category).order("createdat", desc=True).execute()
+    return data.data
+
+#budget endpoints

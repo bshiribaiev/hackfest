@@ -103,18 +103,12 @@ export default function EventsScreen() {
   const handleAISend = async (text: string) => {
     try {
       const advice = await askPurchaseAdvice('6', text);
-      const title =
-        advice.status === 'GO'
-          ? 'Looks good ✅'
-          : advice.status === 'CAREFUL'
-            ? 'Be careful ⚠️'
-            : 'Not a great idea 🚫';
       const body =
         advice.suggestion && advice.suggestion.trim().length > 0
-          ? `${advice.message}\n\n${advice.suggestion}`
+          ? advice.suggestion
           : advice.message;
 
-      Alert.alert(title, body);
+      Alert.alert('AI insight', body);
     } catch (err) {
       Alert.alert(
         'AI unavailable',

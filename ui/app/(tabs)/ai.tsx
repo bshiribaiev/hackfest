@@ -49,9 +49,9 @@ export default function AIScreen() {
       setIsThinking(true);
       const advice = await askPurchaseAdvice('6', text);
 
-      const combinedText =
+      const displayText =
         advice.suggestion && advice.suggestion.trim().length > 0
-          ? `${advice.message}\n\n${advice.suggestion}`
+          ? advice.suggestion
           : advice.message;
 
       setMessages((prev) =>
@@ -59,7 +59,7 @@ export default function AIScreen() {
           m.id === tempId
             ? {
               ...m,
-              text: combinedText,
+              text: displayText,
               status: advice.status,
             }
             : m,
@@ -98,15 +98,6 @@ export default function AIScreen() {
                 <ThemedText style={labelStyle}>
                   {isAI ? 'AI' : 'You'}
                 </ThemedText>
-                {msg.status && (
-                  <ThemedText style={styles.statusPill}>
-                    {msg.status === 'GO'
-                      ? 'Looks good ✅'
-                      : msg.status === 'CAREFUL'
-                        ? 'Be careful ⚠️'
-                        : 'Not a great idea 🚫'}
-                  </ThemedText>
-                )}
                 <ThemedText style={textStyle}>{msg.text}</ThemedText>
               </View>
             );
@@ -143,7 +134,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   screen: {
-    gap: 16,
+    gap: 10,
   },
   chatBubbleAI: {
     alignSelf: 'flex-start',
@@ -152,7 +143,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginTop: 56,
+    marginTop: 12,
   },
   chatBubbleUser: {
     alignSelf: 'flex-end',
@@ -184,13 +175,6 @@ const styles = StyleSheet.create({
   },
   statusPill: {
     fontSize: 11,
-    color: '#111827',
-    backgroundColor: '#e5e7eb',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    marginBottom: 4,
   },
   chatInputWrapper: {
     paddingHorizontal: 12,

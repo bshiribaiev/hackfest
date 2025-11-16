@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchStudentProfile, StudentProfile } from "@/lib/api";
 
 export function useStudentProfile(studentId: number) {
@@ -33,7 +33,9 @@ export function useStudentProfile(studentId: number) {
     };
   }, [studentId, version]);
 
-  const reload = () => setVersion(v => v + 1);
+  const reload = useCallback(() => {
+    setVersion((v) => v + 1);
+  }, []);
 
   return { data, loading, error, reload };
 }

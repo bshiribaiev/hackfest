@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, Image, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -7,7 +7,8 @@ import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ChatInput } from '@/components/home/ChatInput';
-import { askPurchaseAdvice } from '@/lib/api';
+import { askPurchaseAdvice, fetchLeaderboard } from '@/lib/api';
+import Constants from 'expo-constants';
 
 
 // Data structure for a single leader row in the UI table
@@ -101,22 +102,43 @@ export default function LeaderboardScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('savings');
   const [isLoading, setIsLoading] = useState(true);
 
+  const devHost =
+    (Constants.expoConfig?.extra as any)?.backendUrl ??
+    process.env.EXPO_PUBLIC_BACKEND_URL ??
+    null;
+  const studentsBaseUrl =
+    devHost ??
+    (() => {
+      const manifest = (Constants as any).manifest;
+      const manifest2 = (Constants as any).manifest2;
+      const expoConfig = (Constants as any).expoConfig;
+      const hostUri =
+        expoConfig?.hostUri ??
+        manifest2?.extra?.expoClient?.hostUri ??
+        manifest?.debuggerHost ??
+        manifest?.hostUri;
+      if (typeof hostUri !== 'string') return 'http://localhost:8000';
+      const host = hostUri.split(':')[0];
+      return `http://${host}:8000`;
+    })();
+
   // 2. Move useEffect hooks inside the component
   useEffect(() => {
-    // Fetch leaderboard data
-    fetch('http://127.0.0.1:8000/leaderboard')
-      .then(response => response.json())
-      .then(setLeaderboardData)
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    // Fetch student data (for now we just reuse the same FastAPI host as dev)
-    fetch('http://127.0.0.1:8000/students/')
-      .then(response => response.json())
-      .then(setStudentData)
-      .catch(console.error);
+    const load = async () => {
+      try {
+        const [entries, students] = await Promise.all([
+          fetchLeaderboard(6),
+          fetch(`${studentsBaseUrl}/students/`).then((r) => r.json()),
+        ]);
+        setLeaderboardData(entries as any);
+        setStudentData(students as any);
+      } catch (err) {
+        console.error('Failed to load leaderboard', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
   }, []);
 
   // 4. Function to combine leaderboard data with student names
@@ -199,18 +221,12 @@ export default function LeaderboardScreen() {
   const handleAISend = async (text: string) => {
     try {
       const advice = await askPurchaseAdvice('6', text);
-      const title =
-        advice.status === 'GO'
-          ? 'Looks good ✅'
-          : advice.status === 'CAREFUL'
-            ? 'Be careful ⚠️'
-            : 'Not a great idea 🚫';
       const body =
         advice.suggestion && advice.suggestion.trim().length > 0
-          ? `${advice.message}\n\n${advice.suggestion}`
+          ? advice.suggestion
           : advice.message;
 
-      Alert.alert(title, body);
+      Alert.alert('AI insight', body);
     } catch (err) {
       Alert.alert(
         'AI unavailable',
@@ -324,19 +340,25 @@ export default function LeaderboardScreen() {
                 style={[
                   styles.leaderRow,
                   idx < leaders.length - 1 && styles.leaderRowDivider,
-                  leader.isCurrentUser && styles.leaderRowCurrent,
                 ]}>
                 <View style={styles.rankIconCell}>{getRankIcon(leader.rank)}</View>
-                <View style={styles.avatarCircle}>
-                  <ThemedText style={styles.avatarInitials}>
-                    {/* Display initials from the fetched name */}
-                    {leader.name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')
-                      .toUpperCase()}
-                  </ThemedText>
-                </View>
+                {leader.isCurrentUser ? (
+                  <Image
+                    source={require('@/assets/images/kevin.png')}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.avatarCircle}>
+                    <ThemedText style={styles.avatarInitials}>
+                      {leader.name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .toUpperCase()}
+                    </ThemedText>
+                  </View>
+                )}
                 <View style={styles.leaderInfoCol}>
                   <View style={styles.leaderNameRow}>
                     <ThemedText style={styles.leaderName}>{leader.name}</ThemedText>
@@ -507,10 +529,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  leaderRowCurrent: {
-    backgroundColor: '#eef2ff',
-    borderRadius: 14,
-  },
   rankIconCell: {
     width: 28,
     alignItems: 'center',
@@ -531,6 +549,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
   },
   leaderInfoCol: {
     flex: 1,

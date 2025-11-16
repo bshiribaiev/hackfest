@@ -30,6 +30,7 @@ export type StudentProfile = {
   budgets: any[];
   recent_transactions: any[];
   leaderboard_position: any | null;
+  wallet?: any | null;
 };
 
 export async function fetchStudentProfile(
@@ -40,6 +41,27 @@ export async function fetchStudentProfile(
     throw new Error(`Failed to load profile (${res.status})`);
   }
   return res.json();
+}
+
+export async function fetchLeaderboard(currentUserId: number) {
+  const url = new URL(`${API_BASE_URL}/leaderboard`);
+  url.searchParams.set('current_user_id', String(currentUserId));
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    throw new Error(`Failed to load leaderboard (${res.status})`);
+  }
+  return res.json() as Promise<
+    {
+      id: number;
+      user_id: number;
+      category: 'savings' | 'events' | 'eco';
+      value: number;
+      rank: number;
+      badge: string;
+      is_current_user: boolean;
+    }[]
+  >;
 }
 
 export async function updateBudgetLimit(
@@ -103,10 +125,7 @@ export async function askPurchaseAdvice(
   return res.json();
 }
 
-export async function fetchDailyAdvice() {
-  const res = await fetch(`${AI_BASE_URL}/advice/daily`);
-  if (!res.ok) throw new Error("Failed to load daily advice");
-  return res.json() as Promise<{ date: string; tip: string }>;
-}
-
-
+// Note: a previous version of the app used a separate AI service with its own
+// base URL (AI_BASE_URL). The current app sends all AI requests through the
+// FastAPI backend at API_BASE_URL via askPurchaseAdvice, so the old
+// fetchDailyAdvice helper has been removed.***

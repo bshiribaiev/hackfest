@@ -7,6 +7,7 @@ from supabase import create_client, Client
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 from models import *
 
@@ -16,6 +17,14 @@ app = FastAPI()
 # Use the key name you actually have in your .env (originally SUPABASE_KEY).
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+# Configure Gemini (optional – endpoint still works if key is missing)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+else:
+    gemini_model = None
 
 
 @app.post("/students/")
@@ -93,6 +102,62 @@ async def get_student_profile(student_id: int):
     }
 
 
+@app.get("/leaderboard")
+async def get_leaderboard(current_user_id: int = 6):
+    """
+    Simple savings leaderboard based on the latest leaderboard_snapshots
+    row per user. Returns data in a shape that the mobile app expects.
+    """
+    resp = (
+        supabase.table("leaderboard_snapshots")
+        .select("*")
+        .order("snapshot_date", desc=True)
+        .execute()
+    )
+    rows = resp.data or []
+
+    # Keep the most recent snapshot per user
+    latest_by_user: dict[int, dict] = {}
+    for row in rows:
+        user_id = int(row.get("user_id"))
+        if user_id not in latest_by_user:
+            latest_by_user[user_id] = row
+
+    entries = list(latest_by_user.values())
+
+    # Sort by total_savings desc to compute ranks
+    entries.sort(key=lambda r: float(
+        r.get("total_savings") or 0.0), reverse=True)
+
+    def badge_for_rank(rank: int) -> str:
+        if rank == 1:
+            return "Savings Champion"
+        if rank == 2:
+            return "Smart Saver"
+        if rank == 3:
+            return "Budget Pro"
+        return "Rising Star"
+
+    result = []
+    for idx, row in enumerate(entries):
+        user_id = int(row.get("user_id"))
+        total_savings = float(row.get("total_savings") or 0.0)
+        rank = idx + 1
+        result.append(
+            {
+                "id": int(row.get("id")),
+                "user_id": user_id,
+                "category": "savings",
+                "value": total_savings,
+                "rank": rank,
+                "badge": badge_for_rank(rank),
+                "is_current_user": user_id == current_user_id,
+            }
+        )
+
+    return result
+
+
 class AIAdviceRequest(BaseModel):
     user_id: int
     message: str
@@ -138,7 +203,16 @@ def _summarise_spending(user_id: int, category: Optional[str] = None) -> tuple[f
     tx_resp = tx_query.execute()
     txs = tx_resp.data or []
 
-    total_spent = float(sum(Decimal(str(t.get("amount", 0))) for t in txs))
+    # Align "spent" with the mobile app: exclude top-ups and moves to savings.
+    def is_spending_tx(t: dict) -> bool:
+        cat = str(t.get("category") or "")
+        return cat not in ("top-up", "save-to-savings")
+
+    spending_txs = [t for t in txs if is_spending_tx(t)]
+
+    total_spent = float(
+        sum(Decimal(str(t.get("amount", 0))) for t in spending_txs)
+    )
     return total_budget, total_spent
 
 
@@ -168,23 +242,54 @@ async def ai_advice(payload: AIAdviceRequest) -> AIAdviceResponse:
             f"You're in good shape: you've used about {ratio:.0%} of your "
             f"${total_budget:,.0f} budget over the last week."
         )
-        suggestion = "If you keep this pace you should comfortably stay within your budget."
+        base_suggestion = (
+            "If you keep this pace you should comfortably stay within your budget."
+        )
     elif ratio < 1.0:
         status = "CAREFUL"
         msg = (
             f"You're getting close to your limit, with about {ratio:.0%} of your "
             f"${total_budget:,.0f} budget already spent this week."
         )
-        suggestion = "Consider pausing non‑essential purchases for a few days so you stay on track."
+        base_suggestion = (
+            "Consider pausing non‑essential purchases for a few days so you stay on track."
+        )
     else:
         status = "NOPE"
         msg = (
             f"You've spent around {ratio:.0%} of your ${total_budget:,.0f} budget in the last week, "
             "which is over your current limit."
         )
-        suggestion = "It might be a good idea to cut back on non‑essential spending for the rest of the week."
+        base_suggestion = (
+            "It might be a good idea to cut back on non‑essential spending for the rest of the week."
+        )
 
-    # You can optionally incorporate the user's question into the message if needed.
+    # Try to get a smarter, question‑aware suggestion from Gemini.
+    suggestion = base_suggestion
+    if gemini_model and payload.message:
+        try:
+            prompt = f"""
+You are a friendly campus money assistant helping a student understand their spending.
+
+Inputs:
+- Weekly budget total: ${total_budget:,.2f}
+- Amount spent in the last 7 days: ${total_spent:,.2f}
+- Budget usage ratio: {ratio:.0%}
+- Overall status: {status} (GO = on track, CAREFUL = close to limit, NOPE = over budget)
+- Student's question: "{payload.message}"
+
+Give one short, encouraging paragraph (2–3 sentences) of personalised advice
+that directly answers the student's question and references their numbers when helpful.
+Do NOT restate the status word (GO/CAREFUL/NOPE); just explain what it means and what they should do next.
+"""
+            resp = gemini_model.generate_content(prompt)
+            text = (resp.text or "").strip()
+            if text:
+                suggestion = text
+        except Exception as e:
+            # Log and gracefully fall back to the base suggestion
+            print("Gemini advice failed:", e)
+
     return AIAdviceResponse(status=status, message=msg, suggestion=suggestion)
 
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ChatInput } from '@/components/home/ChatInput';
 import { askPurchaseAdvice } from '@/lib/api';
+import { useStudentProfile } from '@/hooks/useStudentProfile';
 
 type Insight = {
   id: number;
@@ -18,11 +20,10 @@ type Insight = {
   bgColor: string;
 };
 
-const INSIGHTS: Insight[] = [
+const STATIC_INSIGHTS_META: Omit<Insight, 'description'>[] = [
   {
     id: 1,
     title: 'Weekly Budget Alert',
-    description: "You’ve spent $127.50 this week. That’s 15% more than last week.",
     icon: 'alert-circle-outline',
     color: '#ea580c',
     bgColor: '#ffedd5',
@@ -30,7 +31,6 @@ const INSIGHTS: Insight[] = [
   {
     id: 2,
     title: 'Smart Saving Tip',
-    description: 'Making coffee at home 3x/week could save you $45/month.',
     icon: 'bulb-outline',
     color: '#eab308',
     bgColor: '#fef9c3',
@@ -38,7 +38,6 @@ const INSIGHTS: Insight[] = [
   {
     id: 3,
     title: 'Spending Pattern',
-    description: 'You spend most on weekdays between 12–2pm. Consider meal prep!',
     icon: 'trending-down-outline',
     color: '#2563eb',
     bgColor: '#dbeafe',
@@ -46,27 +45,119 @@ const INSIGHTS: Insight[] = [
 ];
 
 export default function TipsScreen() {
+  const STUDENT_ID = 6;
+  const { data: profile, reload } = useStudentProfile(STUDENT_ID);
+
+  // Ensure tips reflect the latest wallet/budget data whenever the tab is focused.
+  useFocusEffect(
+    React.useCallback(() => {
+      reload();
+    }, [reload]),
+  );
+
+  const wallet = (profile as any)?.wallet;
+  const currentBalance = wallet ? Number(wallet.balance ?? 0) : 0;
+
+  const monthlyTarget = React.useMemo(() => {
+    const budgets = (profile as any)?.budgets ?? [];
+    const overallMonthly = budgets.find(
+      (b: any) => b.category === 'overall' && b.period === 'monthly',
+    );
+    if (overallMonthly) return Number(overallMonthly.limit_amount ?? 0);
+    return 500; // sensible demo default
+  }, [profile]);
+
   const monthlyGoal = {
-    target: 500,
-    current: 387.5,
+    target: monthlyTarget,
+    current: currentBalance,
   };
-  const progress = (monthlyGoal.current / monthlyGoal.target) * 100;
+  const progress =
+    monthlyGoal.target > 0 ? (monthlyGoal.current / monthlyGoal.target) * 100 : 0;
+
+  const { spentThisWeek, spentLastWeek } = React.useMemo(() => {
+    if (!profile) {
+      return { spentThisWeek: 0, spentLastWeek: 0 };
+    }
+    const txs = (profile as any).recent_transactions ?? [];
+    const now = new Date();
+    const weekAgo = new Date();
+    weekAgo.setDate(now.getDate() - 7);
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(now.getDate() - 14);
+
+    const isSpendingTx = (t: any) => {
+      const cat = (t.category ?? '').toString();
+      return cat !== 'top-up' && cat !== 'save-to-savings';
+    };
+
+    const spentThisWeek = txs
+      .filter((t: any) => {
+        const created = t.createdat ?? t.created_at;
+        if (!created) return false;
+        const d = new Date(created);
+        return isSpendingTx(t) && d >= weekAgo;
+      })
+      .reduce((sum: number, t: any) => sum + Number(t.amount ?? 0), 0);
+
+    const spentLastWeek = txs
+      .filter((t: any) => {
+        const created = t.createdat ?? t.created_at;
+        if (!created) return false;
+        const d = new Date(created);
+        return isSpendingTx(t) && d >= twoWeeksAgo && d < weekAgo;
+      })
+      .reduce((sum: number, t: any) => sum + Number(t.amount ?? 0), 0);
+
+    return { spentThisWeek, spentLastWeek };
+  }, [profile]);
+
+  const weeklyAlertDescription = React.useMemo(() => {
+    if (!spentThisWeek && !spentLastWeek) {
+      return "You haven't spent anything yet this week. Nice start!";
+    }
+    if (!spentLastWeek) {
+      return `You've spent $${spentThisWeek.toFixed(
+        2,
+      )} this week so far. This is your first tracked week.`;
+    }
+    const diff = spentThisWeek - spentLastWeek;
+    const pct = spentLastWeek > 0 ? (diff / spentLastWeek) * 100 : 0;
+    const direction = diff >= 0 ? 'more' : 'less';
+    return `You’ve spent $${spentThisWeek.toFixed(
+      2,
+    )} this week. That’s ${Math.abs(pct).toFixed(0)}% ${direction} than last week.`;
+  }, [spentThisWeek, spentLastWeek]);
+
+  const insights: Insight[] = React.useMemo(
+    () =>
+      STATIC_INSIGHTS_META.map((meta) => {
+        if (meta.id === 1) {
+          return { ...meta, description: weeklyAlertDescription };
+        }
+        if (meta.id === 2) {
+          return {
+            ...meta,
+            description: 'Making coffee at home 3x/week could save you around $45/month.',
+          };
+        }
+        return {
+          ...meta,
+          description:
+            'You tend to spend the most on weekdays around lunchtime. Consider meal prep!',
+        };
+      }),
+    [weeklyAlertDescription],
+  );
 
   const handleAISend = async (text: string) => {
     try {
       const advice = await askPurchaseAdvice('6', text);
-      const title =
-        advice.status === 'GO'
-          ? 'Looks good ✅'
-          : advice.status === 'CAREFUL'
-            ? 'Be careful ⚠️'
-            : 'Not a great idea 🚫';
       const body =
         advice.suggestion && advice.suggestion.trim().length > 0
-          ? `${advice.message}\n\n${advice.suggestion}`
+          ? advice.suggestion
           : advice.message;
 
-      Alert.alert(title, body);
+      Alert.alert('AI insight', body);
     } catch (err) {
       Alert.alert(
         'AI unavailable',
@@ -143,7 +234,7 @@ export default function TipsScreen() {
           </View>
 
           <ThemedView style={styles.cardList}>
-            {INSIGHTS.map((insight) => (
+            {insights.map((insight) => (
               <View key={insight.id} style={styles.insightCard}>
                 <View style={[styles.insightIconWrap, { backgroundColor: insight.bgColor }]}>
                   <Ionicons name={insight.icon} size={18} color={insight.color} />
@@ -156,45 +247,6 @@ export default function TipsScreen() {
             ))}
           </ThemedView>
 
-          {/* Breakdown */}
-          <ThemedView style={styles.breakdownCard}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              This Week’s Breakdown
-            </ThemedText>
-
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownLabelRow}>
-                <View style={[styles.dot, { backgroundColor: '#f97316' }]} />
-                <ThemedText style={styles.breakdownLabel}>Food & Dining</ThemedText>
-              </View>
-              <ThemedText style={styles.breakdownValue}>$56.50 (44%)</ThemedText>
-            </View>
-            <View style={styles.breakdownTrack}>
-              <View style={[styles.breakdownFill, { width: '44%' }]} />
-            </View>
-
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownLabelRow}>
-                <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />
-                <ThemedText style={styles.breakdownLabel}>Transportation</ThemedText>
-              </View>
-              <ThemedText style={styles.breakdownValue}>$35.00 (27%)</ThemedText>
-            </View>
-            <View style={styles.breakdownTrack}>
-              <View style={[styles.breakdownFill, { width: '27%' }]} />
-            </View>
-
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownLabelRow}>
-                <View style={[styles.dot, { backgroundColor: '#8b5cf6' }]} />
-                <ThemedText style={styles.breakdownLabel}>Books & Supplies</ThemedText>
-              </View>
-              <ThemedText style={styles.breakdownValue}>$36.00 (29%)</ThemedText>
-            </View>
-            <View style={styles.breakdownTrack}>
-              <View style={[styles.breakdownFill, { width: '29%' }]} />
-            </View>
-          </ThemedView>
         </ThemedView>
       </ParallaxScrollView>
     </ThemedView>

@@ -10,9 +10,11 @@ export function WalletHeader() {
         <ThemedView lightColor="#f9fafb" darkColor="#020617" style={styles.container}>
             <View style={styles.left}>
                 <View style={styles.avatar}>
-                    <ThemedText type="defaultSemiBold" style={styles.avatarText}>
-                        KS
-                    </ThemedText>
+                    <Image
+                        source={require('@/assets/images/kevin.png')}
+                        style={styles.avatarImage}
+                        resizeMode="cover"
+                    />
                 </View>
                 <View>
                     <View style={styles.nameRow}>
@@ -61,8 +63,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    avatarText: {
-        fontSize: 16,
+    avatarImage: {
+        width: 40,
+        height: 40,
+        borderRadius: 999,
     },
     nameRow: {
         flexDirection: 'row',

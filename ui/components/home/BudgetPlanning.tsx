@@ -4,6 +4,7 @@ import { Alert, Modal, Pressable, StyleSheet, TextInput, View } from 'react-nati
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { updateBudgetLimit } from '@/lib/api';
+import { CircularBudgetRing } from '../../ui-design/CircularBudgetRing';
 
 type BudgetPlanningProps = {
     profile: any | null;
@@ -114,13 +115,13 @@ export function BudgetPlanning({ profile, onBudgetUpdated }: BudgetPlanningProps
 
                     return (
                         <View key={cat.name} style={styles.categoryCol}>
-                            {/* Simple circular progress approximation */}
-                            <View style={[styles.circleOuter]}>
-                                <View style={[styles.circleInner]}>
-                                    <ThemedText style={styles.circleIcon}>{cat.icon}</ThemedText>
-                                    <ThemedText style={styles.circlePct}>{`${pct.toFixed(0)}%`}</ThemedText>
-                                </View>
-                            </View>
+                            <CircularBudgetRing
+                                percent={pct}
+                                color={cat.color}
+                            >
+                                <ThemedText style={styles.circleIcon}>{cat.icon}</ThemedText>
+                                <ThemedText style={styles.circlePct}>{`${pct.toFixed(0)}%`}</ThemedText>
+                            </CircularBudgetRing>
 
                             <View style={styles.categoryMeta}>
                                 <ThemedText style={styles.catName}>{cat.name}</ThemedText>
@@ -259,22 +260,6 @@ const styles = StyleSheet.create({
     },
     categoryCol: {
         flex: 1,
-        alignItems: 'center',
-    },
-    circleOuter: {
-        width: 84,
-        height: 84,
-        borderRadius: 42,
-        backgroundColor: '#e5e7eb',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    circleInner: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: '#ffffff',
-        justifyContent: 'center',
         alignItems: 'center',
     },
     circleIcon: {

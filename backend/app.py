@@ -263,6 +263,15 @@ async def get_budgets(user_id: int):
     return data.data
 
 
+<<<<<<< HEAD
+=======
+@app.get("/leaderboard/")
+async def get_leaderboard():
+
+    data = supabase.table("leaderboard_snapshots").select("*").execute()
+    return data.data
+
+>>>>>>> 80571077145e4dcd77561dd52c98988c7d74a1b6
 @app.put("/budgets/{budget_id}")
 async def update_budget(budget_id: int, limit_amount: float):
 

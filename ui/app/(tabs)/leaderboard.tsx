@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 import React, { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
+=======
+import React, { useState, useEffect } from 'react'; // 1. Import useEffect
+import { StyleSheet, View } from 'react-native';
+>>>>>>> 80571077145e4dcd77561dd52c98988c7d74a1b6
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,17 +14,42 @@ import { ThemedView } from '@/components/themed-view';
 import { ChatInput } from '@/components/home/ChatInput';
 import { askPurchaseAdvice } from '@/lib/api';
 
+// --- Type Definitions for Frontend ---
+
+// Data structure for a single leader row in the UI table
 type Leader = {
   rank: number;
-  name: string;
-  value: string;
+  name: string; // The name that will be displayed
+  value: string; // e.g., '$245.50', '12 events'
   badge: string;
   points?: number;
   isCurrentUser?: boolean;
 };
 
+// Data structure for the raw fetched leaderboard items
+type LeaderboardItem = {
+  id: number;
+  user_id: number; // Key to link to student data
+  category: 'savings' | 'events' | 'eco';
+  value: number; // The raw number value
+  rank: number;
+  badge: string;
+  is_current_user: boolean; // Assuming this comes from the backend
+};
+
+// Data structure for a single student item
+type StudentItem = {
+  id: number;
+  name: string;
+  email: string;
+  avatarcolor: string;
+  major: string;
+  createdat: string;
+};
+
 type TabKey = 'savings' | 'events' | 'eco';
 
+<<<<<<< HEAD
 const LEADERBOARD_DATA: Record<TabKey, Leader[]> = {
   savings: [
     { rank: 1, name: 'Emma Wilson', value: '$245.50', badge: 'Savings Champion', points: 2450 },
@@ -61,6 +91,9 @@ const LEADERBOARD_DATA: Record<TabKey, Leader[]> = {
     { rank: 3, name: 'Jordan Lee', value: '76 pts', badge: 'Planet Saver', points: 76 },
   ],
 };
+=======
+// --- Helper Functions ---
+>>>>>>> 80571077145e4dcd77561dd52c98988c7d74a1b6
 
 function getRankIcon(rank: number) {
   if (rank === 1) return <Ionicons name="trophy" size={18} color="#facc15" />;
@@ -69,9 +102,101 @@ function getRankIcon(rank: number) {
   return <ThemedText style={styles.rankText}>#{rank}</ThemedText>;
 }
 
+// --- Component ---
+
 export default function LeaderboardScreen() {
+  // 2. Move state declarations inside the component
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardItem[]>([]);
+  const [studentData, setStudentData] = useState<StudentItem[]>([]); // Array of students
   const [activeTab, setActiveTab] = useState<TabKey>('savings');
-  const leaders = LEADERBOARD_DATA[activeTab];
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 2. Move useEffect hooks inside the component
+  useEffect(() => {
+    // Fetch leaderboard data
+    fetch('http://127.0.0.1:8000/leaderboard')
+      .then(response => response.json())
+      .then(setLeaderboardData)
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    // Fetch student data
+    fetch('http://[YOUR_IP]/students/')
+      .then(response => response.json())
+      .then(setStudentData)
+      .catch(console.error);
+  }, []);
+
+  // 4. Function to combine leaderboard data with student names
+  const getLeaderboardWithNames = (data: LeaderboardItem[], students: StudentItem[]): Record<TabKey, Leader[]> => {
+    const studentsMap = new Map(students.map(s => [s.id, s.name]));
+
+    const transformedData: Record<TabKey, Leader[]> = {
+      savings: [],
+      events: [],
+      eco: [],
+    };
+
+    data.forEach(item => {
+      // Find the student's name using user_id
+      const studentName = studentsMap.get(item.user_id) || 'Unknown Student';
+      
+      const leader: Leader = {
+        rank: item.rank,
+        name: studentName,
+        badge: item.badge,
+        // Format the value based on the category (e.g., prepend '$', append ' events'/' pts')
+        value: 
+          item.category === 'savings' ? `$${item.value.toFixed(2)}` :
+          item.category === 'events' ? `${item.value} events` :
+          item.category === 'eco' ? `${item.value} pts` : 
+          `${item.value}`,
+        points: item.category === 'eco' ? item.value : undefined, // Assuming only 'eco' uses points in the UI like this
+        isCurrentUser: item.is_current_user,
+      };
+
+      // Group by category
+      transformedData[item.category].push(leader);
+    });
+
+    // Ensure they are sorted by rank, although the backend should handle this
+    Object.keys(transformedData).forEach(key => {
+      transformedData[key as TabKey].sort((a, b) => a.rank - b.rank);
+    });
+
+    return transformedData;
+  };
+
+  // 5. Compute the final leader data, using the mock data as a fallback structure/example
+  const transformedLeaderboard = getLeaderboardWithNames(leaderboardData, studentData);
+
+  // Fallback structure in case one category is empty in the fetched data
+  const LEADERBOARD_DISPLAY_DATA: Record<TabKey, Leader[]> = {
+    savings: transformedLeaderboard.savings.length > 0 ? transformedLeaderboard.savings : [
+      // Fallback/Placeholder if data for a category is not present
+      { rank: 1, name: 'Loading...', value: '...', badge: '...', points: 0 },
+    ],
+    events: transformedLeaderboard.events.length > 0 ? transformedLeaderboard.events : [
+      { rank: 1, name: 'Loading...', value: '...', badge: '...', points: 0 },
+    ],
+    eco: transformedLeaderboard.eco.length > 0 ? transformedLeaderboard.eco : [
+      { rank: 1, name: 'Loading...', value: '...', badge: '...', points: 0 },
+    ],
+  };
+
+  // Use the computed data for the active tab
+  const leaders = LEADERBOARD_DISPLAY_DATA[activeTab];
+
+  // Optional: Show loading state
+  if (isLoading && leaderboardData.length === 0) {
+    return (
+      <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ThemedText>Loading Leaderboard...</ThemedText>
+      </ThemedView>
+    );
+  }
 
   const handleAISend = async (text: string) => {
     try {
@@ -109,6 +234,8 @@ export default function LeaderboardScreen() {
 
       <ParallaxScrollView>
         <ThemedView style={styles.screen}>
+          {/* ... (rest of the header and stats UI remains the same) ... */}
+
           {/* Header gradient-ish card */}
           <ThemedView lightColor="#f97316" darkColor="#ea580c" style={styles.headerCard}>
             <View style={styles.headerIconCircle}>
@@ -130,12 +257,19 @@ export default function LeaderboardScreen() {
 
           {/* Your stats row */}
           <View style={styles.statsRow}>
+            {/* Note: The 'Your Rank', 'This Month', and 'Points' stats currently use hardcoded values (#4, +12, 892). 
+                You should update these to use the 'isCurrentUser' item from your fetched/transformed data 
+                for the active tab, if you want them to be dynamic.
+            */}
             <ThemedView style={styles.statCard}>
               <View style={[styles.statIconCircle, { backgroundColor: '#e0e7ff' }]}>
                 <Ionicons name="flag-outline" size={16} color="#4f46e5" />
               </View>
               <ThemedText style={styles.statLabel}>Your Rank</ThemedText>
-              <ThemedText style={styles.statValue}>#4</ThemedText>
+              {/* This should be dynamically fetched */}
+              <ThemedText style={styles.statValue}>
+                #{leaders.find(l => l.isCurrentUser)?.rank || '-'}
+              </ThemedText> 
             </ThemedView>
 
             <ThemedView style={styles.statCard}>
@@ -151,7 +285,10 @@ export default function LeaderboardScreen() {
                 <Ionicons name="flash-outline" size={16} color="#7c3aed" />
               </View>
               <ThemedText style={styles.statLabel}>Points</ThemedText>
-              <ThemedText style={styles.statValue}>892</ThemedText>
+              {/* This should be dynamically fetched */}
+              <ThemedText style={styles.statValue}>
+                {leaders.find(l => l.isCurrentUser)?.points || '-'}
+              </ThemedText>
             </ThemedView>
           </View>
 
@@ -181,7 +318,7 @@ export default function LeaderboardScreen() {
             })}
           </View>
 
-          {/* Leader list */}
+          {/* Leader list: Now uses fetched and mapped data with actual student names */}
           <ThemedView style={styles.listCard}>
             {leaders.map((leader, idx) => (
               <View
@@ -194,10 +331,12 @@ export default function LeaderboardScreen() {
                 <View style={styles.rankIconCell}>{getRankIcon(leader.rank)}</View>
                 <View style={styles.avatarCircle}>
                   <ThemedText style={styles.avatarInitials}>
+                    {/* Display initials from the fetched name */}
                     {leader.name
                       .split(' ')
                       .map((n) => n[0])
-                      .join('')}
+                      .join('')
+                      .toUpperCase()}
                   </ThemedText>
                 </View>
                 <View style={styles.leaderInfoCol}>
@@ -255,6 +394,8 @@ export default function LeaderboardScreen() {
     </ThemedView>
   );
 }
+
+// ... (Styles remain the same) ...
 
 const styles = StyleSheet.create({
   root: {

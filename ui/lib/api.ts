@@ -25,6 +25,8 @@ const API_BASE_URL: string =
   process.env.EXPO_PUBLIC_BACKEND_URL ??
   (devHost ? `http://${devHost}:8000` : "http://localhost:8000");
 
+export type BudgetPeriod = "weekly" | "monthly";
+
 export type StudentProfile = {
   student: any;
   budgets: any[];
@@ -62,6 +64,33 @@ export async function fetchLeaderboard(currentUserId: number) {
       is_current_user: boolean;
     }[]
   >;
+}
+
+export async function createBudget(
+  userId: number,
+  payload: {
+    category: string;
+    period: BudgetPeriod;
+    limit_amount: number;
+  },
+) {
+  const url = new URL(`${API_BASE_URL}/budgets/`);
+  url.searchParams.set("user_id", String(userId));
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      ...payload,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to create budget (${res.status})`);
+  }
+
+  return res.json();
 }
 
 export async function updateBudgetLimit(

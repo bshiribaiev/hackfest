@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ChatInput } from '@/components/home/ChatInput';
-import { askPurchaseAdvice } from '@/lib/api';
+import { askPurchaseAdvice, createBudget, updateBudgetLimit } from '@/lib/api';
 import { useStudentProfile } from '@/hooks/useStudentProfile';
 
 type Insight = {
@@ -58,14 +58,22 @@ export default function TipsScreen() {
   const wallet = (profile as any)?.wallet;
   const currentBalance = wallet ? Number(wallet.balance ?? 0) : 0;
 
+  const budgets = (profile as any)?.budgets ?? [];
+
+  const overallMonthlyBudget = React.useMemo(
+    () =>
+      budgets.find(
+        (b: any) => b.category === 'overall' && b.period === 'monthly',
+      ),
+    [budgets],
+  );
+
   const monthlyTarget = React.useMemo(() => {
-    const budgets = (profile as any)?.budgets ?? [];
-    const overallMonthly = budgets.find(
-      (b: any) => b.category === 'overall' && b.period === 'monthly',
-    );
-    if (overallMonthly) return Number(overallMonthly.limit_amount ?? 0);
+    if (overallMonthlyBudget) {
+      return Number(overallMonthlyBudget.limit_amount ?? 0);
+    }
     return 500; // sensible demo default
-  }, [profile]);
+  }, [overallMonthlyBudget]);
 
   const monthlyGoal = {
     target: monthlyTarget,
@@ -149,6 +157,68 @@ export default function TipsScreen() {
     [weeklyAlertDescription],
   );
 
+  const handleEditMonthlyGoal = React.useCallback(() => {
+    const existingLimit =
+      overallMonthlyBudget && overallMonthlyBudget.limit_amount != null
+        ? Number(overallMonthlyBudget.limit_amount)
+        : monthlyTarget;
+
+    // iOS-only prompt; on Android we fall back to a simple alert.
+    if (typeof Alert.prompt !== 'function') {
+      Alert.alert(
+        'Edit monthly budget',
+        `Current goal is $${existingLimit.toFixed(
+          2,
+        )}. Budget editing is currently available on iOS only.`,
+      );
+      return;
+    }
+
+    Alert.prompt(
+      'Edit monthly budget',
+      'Enter your monthly budget amount in dollars.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: async (value: string | undefined) => {
+            if (!value) return;
+
+            const cleaned = value.replace(/[^0-9.]/g, '');
+            const parsed = Number(cleaned);
+            if (!isFinite(parsed) || parsed <= 0) {
+              Alert.alert(
+                'Invalid amount',
+                'Please enter a positive number for your budget.',
+              );
+              return;
+            }
+
+            try {
+              if (overallMonthlyBudget?.id) {
+                await updateBudgetLimit(overallMonthlyBudget.id, parsed);
+              } else {
+                await createBudget(STUDENT_ID, {
+                  category: 'overall',
+                  period: 'monthly',
+                  limit_amount: parsed,
+                });
+              }
+              reload();
+            } catch (err) {
+              Alert.alert(
+                'Could not save budget',
+                err instanceof Error ? err.message : 'Please try again.',
+              );
+            }
+          },
+        },
+      ],
+      'plain-text',
+      existingLimit.toString(),
+    );
+  }, [STUDENT_ID, overallMonthlyBudget, monthlyTarget, reload]);
+
   const handleAISend = async (text: string) => {
     try {
       const advice = await askPurchaseAdvice('6', text);
@@ -204,10 +274,15 @@ export default function TipsScreen() {
           {/* Monthly goal */}
           <ThemedView style={styles.goalCard}>
             <View style={styles.goalHeaderRow}>
-              <View style={styles.goalIconCircle}>
-                <Ionicons name="flag-outline" size={18} color="#4f46e5" />
+              <View style={styles.goalHeaderLeft}>
+                <View style={styles.goalIconCircle}>
+                  <Ionicons name="flag-outline" size={18} color="#4f46e5" />
+                </View>
+                <ThemedText style={styles.goalTitle}>Monthly Budget Goal</ThemedText>
               </View>
-              <ThemedText style={styles.goalTitle}>Monthly Budget Goal</ThemedText>
+              <Pressable onPress={handleEditMonthlyGoal} hitSlop={8}>
+                <ThemedText style={styles.goalEditText}>Edit</ThemedText>
+              </Pressable>
             </View>
             <View style={styles.goalStatsCol}>
               <View style={styles.goalRow}>
@@ -305,6 +380,12 @@ const styles = StyleSheet.create({
   goalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  goalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   goalIconCircle: {
@@ -318,6 +399,11 @@ const styles = StyleSheet.create({
   goalTitle: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  goalEditText: {
+    fontSize: 13,
+    color: '#4f46e5',
+    fontWeight: '500',
   },
   goalStatsCol: {
     marginTop: 8,

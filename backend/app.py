@@ -177,8 +177,15 @@ def _summarise_spending(user_id: int, category: Optional[str] = None) -> tuple[f
     optionally scoped to a single budget category.
     """
     # Fetch budgets for the user
-    budgets_query = supabase.table(
-        "budgets").select("*").eq("user_id", user_id)
+    # For consistency with the mobile app's "Weekly Budget" card, we focus on
+    # **weekly** budgets here. This keeps the AI's notion of "your weekly budget"
+    # aligned with what the user sees on the Home screen.
+    budgets_query = (
+        supabase.table("budgets")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("period", "weekly")
+    )
     if category:
         budgets_query = budgets_query.eq("category", category)
     budgets_resp = budgets_query.execute()
@@ -226,6 +233,27 @@ async def ai_advice(payload: AIAdviceRequest) -> AIAdviceResponse:
         user_id=payload.user_id, category=payload.category
     )
 
+    # Try to fetch an explicit "overall / monthly" budget so the AI can answer
+    # questions like "what's my monthly budget?" using the *actual* value from
+    # the app instead of approximating from the weekly amount.
+    monthly_budget_total: float = 0.0
+    try:
+        monthly_resp = (
+            supabase.table("budgets")
+            .select("*")
+            .eq("user_id", payload.user_id)
+            .eq("period", "monthly")
+            .eq("category", "overall")
+            .maybe_single()
+            .execute()
+        )
+        if monthly_resp.data:
+            monthly_budget_total = float(
+                monthly_resp.data.get("limit_amount") or 0.0  # type: ignore[attr-defined]
+            )
+    except Exception as e:
+        print("Monthly budget lookup failed:", e)
+
     # No budgets configured
     if total_budget <= 0:
         return AIAdviceResponse(
@@ -268,12 +296,18 @@ async def ai_advice(payload: AIAdviceRequest) -> AIAdviceResponse:
     suggestion = base_suggestion
     if gemini_model and payload.message:
         try:
+            monthly_line = (
+                f"- Overall monthly budget (if set): ${monthly_budget_total:,.2f}\n"
+                if monthly_budget_total > 0
+                else "- Overall monthly budget (if set): not configured yet\n"
+            )
+
             prompt = f"""
 You are a friendly campus money assistant helping a student understand their spending.
 
 Inputs:
 - Weekly budget total: ${total_budget:,.2f}
-- Amount spent in the last 7 days: ${total_spent:,.2f}
+{monthly_line}- Amount spent in the last 7 days: ${total_spent:,.2f}
 - Budget usage ratio: {ratio:.0%}
 - Overall status: {status} (GO = on track, CAREFUL = close to limit, NOPE = over budget)
 - Student's question: "{payload.message}"
@@ -281,6 +315,10 @@ Inputs:
 Give one short, encouraging paragraph (2–3 sentences) of personalised advice
 that directly answers the student's question and references their numbers when helpful.
 Do NOT restate the status word (GO/CAREFUL/NOPE); just explain what it means and what they should do next.
+If the student asks about their monthly budget and a monthly budget value is provided above,
+use that monthly number directly instead of approximating it from the weekly value.
+If no monthly budget is configured yet, it's okay to say that and (optionally) estimate one from the weekly budget.
+Write your answer as plain text only – no markdown formatting, no asterisks (**), and no bullet points.
 """
             resp = gemini_model.generate_content(prompt)
             text = (resp.text or "").strip()

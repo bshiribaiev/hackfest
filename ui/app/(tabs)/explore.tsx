@@ -54,7 +54,7 @@ export default function TipsScreen() {
 
   const handleAISend = async (text: string) => {
     try {
-      const advice = await askPurchaseAdvice('1', text);
+      const advice = await askPurchaseAdvice('6', text);
       const title =
         advice.status === 'GO'
           ? 'Looks good ✅'
@@ -88,113 +88,113 @@ export default function TipsScreen() {
 
       <ParallaxScrollView>
         <ThemedView style={styles.screen}>
-        {/* Header */}
-        <ThemedView
-          lightColor="#4c1d95"
-          darkColor="#4c1d95"
-          style={styles.headerCard}>
-          <View style={styles.headerIconCircle}>
-            <Ionicons name="sparkles-outline" size={22} color="#fefce8" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <ThemedText
-              type="defaultSemiBold"
-              lightColor="#fefce8"
-              darkColor="#fefce8"
-              style={styles.headerTitle}>
-              Smart Tips
-            </ThemedText>
-            <ThemedText lightColor="#ddd6fe" darkColor="#ddd6fe" style={styles.headerSubtitle}>
-              Insights to help you save more
-            </ThemedText>
-          </View>
-        </ThemedView>
-
-        {/* Monthly goal */}
-        <ThemedView style={styles.goalCard}>
-          <View style={styles.goalHeaderRow}>
-            <View style={styles.goalIconCircle}>
-              <Ionicons name="flag-outline" size={18} color="#4f46e5" />
+          {/* Header */}
+          <ThemedView
+            lightColor="#4c1d95"
+            darkColor="#4c1d95"
+            style={styles.headerCard}>
+            <View style={styles.headerIconCircle}>
+              <Ionicons name="sparkles-outline" size={22} color="#fefce8" />
             </View>
-            <ThemedText style={styles.goalTitle}>Monthly Budget Goal</ThemedText>
-          </View>
-          <View style={styles.goalStatsCol}>
-            <View style={styles.goalRow}>
-              <ThemedText style={styles.goalLabel}>Current balance</ThemedText>
-              <ThemedText style={styles.goalValue}>
-                ${monthlyGoal.current.toFixed(2)} / ${monthlyGoal.target}
+            <View style={{ flex: 1 }}>
+              <ThemedText
+                type="defaultSemiBold"
+                lightColor="#fefce8"
+                darkColor="#fefce8"
+                style={styles.headerTitle}>
+                Smart Tips
+              </ThemedText>
+              <ThemedText lightColor="#ddd6fe" darkColor="#ddd6fe" style={styles.headerSubtitle}>
+                Insights to help you save more
               </ThemedText>
             </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          </ThemedView>
+
+          {/* Monthly goal */}
+          <ThemedView style={styles.goalCard}>
+            <View style={styles.goalHeaderRow}>
+              <View style={styles.goalIconCircle}>
+                <Ionicons name="flag-outline" size={18} color="#4f46e5" />
+              </View>
+              <ThemedText style={styles.goalTitle}>Monthly Budget Goal</ThemedText>
             </View>
-            <ThemedText style={styles.goalHint}>
-              You’re {progress > 75 ? 'on track' : 'slightly behind'} to meet your goal.{' '}
-              {progress > 75 ? 'Keep it up!' : 'Try saving $5 more per day.'}
+            <View style={styles.goalStatsCol}>
+              <View style={styles.goalRow}>
+                <ThemedText style={styles.goalLabel}>Current balance</ThemedText>
+                <ThemedText style={styles.goalValue}>
+                  ${monthlyGoal.current.toFixed(2)} / ${monthlyGoal.target}
+                </ThemedText>
+              </View>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progress}%` }]} />
+              </View>
+              <ThemedText style={styles.goalHint}>
+                You’re {progress > 75 ? 'on track' : 'slightly behind'} to meet your goal.{' '}
+                {progress > 75 ? 'Keep it up!' : 'Try saving $5 more per day.'}
+              </ThemedText>
+            </View>
+          </ThemedView>
+
+          {/* Insights */}
+          <View style={styles.sectionHeaderRow}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Personalized Insights
             </ThemedText>
           </View>
-        </ThemedView>
 
-        {/* Insights */}
-        <View style={styles.sectionHeaderRow}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Personalized Insights
-          </ThemedText>
-        </View>
-
-        <ThemedView style={styles.cardList}>
-          {INSIGHTS.map((insight) => (
-            <View key={insight.id} style={styles.insightCard}>
-              <View style={[styles.insightIconWrap, { backgroundColor: insight.bgColor }]}>
-                <Ionicons name={insight.icon} size={18} color={insight.color} />
+          <ThemedView style={styles.cardList}>
+            {INSIGHTS.map((insight) => (
+              <View key={insight.id} style={styles.insightCard}>
+                <View style={[styles.insightIconWrap, { backgroundColor: insight.bgColor }]}>
+                  <Ionicons name={insight.icon} size={18} color={insight.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.insightTitle}>{insight.title}</ThemedText>
+                  <ThemedText style={styles.insightBody}>{insight.description}</ThemedText>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <ThemedText style={styles.insightTitle}>{insight.title}</ThemedText>
-                <ThemedText style={styles.insightBody}>{insight.description}</ThemedText>
+            ))}
+          </ThemedView>
+
+          {/* Breakdown */}
+          <ThemedView style={styles.breakdownCard}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              This Week’s Breakdown
+            </ThemedText>
+
+            <View style={styles.breakdownRow}>
+              <View style={styles.breakdownLabelRow}>
+                <View style={[styles.dot, { backgroundColor: '#f97316' }]} />
+                <ThemedText style={styles.breakdownLabel}>Food & Dining</ThemedText>
               </View>
+              <ThemedText style={styles.breakdownValue}>$56.50 (44%)</ThemedText>
             </View>
-          ))}
-        </ThemedView>
-
-        {/* Breakdown */}
-        <ThemedView style={styles.breakdownCard}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            This Week’s Breakdown
-          </ThemedText>
-
-          <View style={styles.breakdownRow}>
-            <View style={styles.breakdownLabelRow}>
-              <View style={[styles.dot, { backgroundColor: '#f97316' }]} />
-              <ThemedText style={styles.breakdownLabel}>Food & Dining</ThemedText>
+            <View style={styles.breakdownTrack}>
+              <View style={[styles.breakdownFill, { width: '44%' }]} />
             </View>
-            <ThemedText style={styles.breakdownValue}>$56.50 (44%)</ThemedText>
-          </View>
-          <View style={styles.breakdownTrack}>
-            <View style={[styles.breakdownFill, { width: '44%' }]} />
-          </View>
 
-          <View style={styles.breakdownRow}>
-            <View style={styles.breakdownLabelRow}>
-              <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />
-              <ThemedText style={styles.breakdownLabel}>Transportation</ThemedText>
+            <View style={styles.breakdownRow}>
+              <View style={styles.breakdownLabelRow}>
+                <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />
+                <ThemedText style={styles.breakdownLabel}>Transportation</ThemedText>
+              </View>
+              <ThemedText style={styles.breakdownValue}>$35.00 (27%)</ThemedText>
             </View>
-            <ThemedText style={styles.breakdownValue}>$35.00 (27%)</ThemedText>
-          </View>
-          <View style={styles.breakdownTrack}>
-            <View style={[styles.breakdownFill, { width: '27%' }]} />
-          </View>
+            <View style={styles.breakdownTrack}>
+              <View style={[styles.breakdownFill, { width: '27%' }]} />
+            </View>
 
-          <View style={styles.breakdownRow}>
-            <View style={styles.breakdownLabelRow}>
-              <View style={[styles.dot, { backgroundColor: '#8b5cf6' }]} />
-              <ThemedText style={styles.breakdownLabel}>Books & Supplies</ThemedText>
+            <View style={styles.breakdownRow}>
+              <View style={styles.breakdownLabelRow}>
+                <View style={[styles.dot, { backgroundColor: '#8b5cf6' }]} />
+                <ThemedText style={styles.breakdownLabel}>Books & Supplies</ThemedText>
+              </View>
+              <ThemedText style={styles.breakdownValue}>$36.00 (29%)</ThemedText>
             </View>
-            <ThemedText style={styles.breakdownValue}>$36.00 (29%)</ThemedText>
-          </View>
-          <View style={styles.breakdownTrack}>
-            <View style={[styles.breakdownFill, { width: '29%' }]} />
-          </View>
-        </ThemedView>
+            <View style={styles.breakdownTrack}>
+              <View style={[styles.breakdownFill, { width: '29%' }]} />
+            </View>
+          </ThemedView>
         </ThemedView>
       </ParallaxScrollView>
     </ThemedView>

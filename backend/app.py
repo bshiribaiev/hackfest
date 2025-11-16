@@ -65,11 +65,31 @@ async def get_student_profile(student_id: int):
     leaderboard_response = supabase.table("leaderboard_snapshots").select(
         "*").eq("user_id", student_id).order("snapshot_date", desc=True).limit(1).execute()
 
+    # Wallet row holds canonical balance and savings for the user
+    wallet_response = supabase.table("wallets").select(
+        "*").eq("user_id", student_id).single().execute()
+
+    leaderboard_position = leaderboard_response.data[0] if leaderboard_response.data else None
+
+    # If we have a wallet row, ensure leaderboard savings mirrors wallet.savings
+    if wallet_response.data:
+        wallet_savings = float(wallet_response.data.get("savings", 0) or 0)
+        if leaderboard_position:
+            leaderboard_position["total_savings"] = wallet_savings
+        else:
+            leaderboard_position = {
+                "user_id": student_id,
+                "total_savings": wallet_savings,
+                "rank": 4,
+                "snapshot_date": date.today().isoformat(),
+            }
+
     return {
         "student": student_response.data,
         "budgets": budgets_response.data,
         "recent_transactions": transactions_response.data,
-        "leaderboard_position": leaderboard_response.data[0] if leaderboard_response.data else None
+        "leaderboard_position": leaderboard_position,
+        "wallet": wallet_response.data,
     }
 
 
@@ -172,16 +192,89 @@ async def ai_advice(payload: AIAdviceRequest) -> AIAdviceResponse:
 @app.post("/transactions/")
 async def create_transaction(user_id: int, transaction: Transaction):
 
-    data = supabase.table("transactions").insert({
-        "student_id": user_id,
-        "amount": transaction.amount,
-        "category": transaction.category,
-        "merchant": transaction.merchant,
-        "source": transaction.source,
-        "riskscore": transaction.riskscore,
-        "fraudflag": transaction.fraudflag,
-        "fraudreason": transaction.fraudreason
-    }).execute()
+    # 1. Insert the core transaction record
+    data = supabase.table("transactions").insert(
+        {
+            "student_id": user_id,
+            "amount": transaction.amount,
+            "category": transaction.category,
+            "merchant": transaction.merchant,
+            "source": transaction.source,
+            "riskscore": transaction.riskscore,
+            "fraudflag": transaction.fraudflag,
+            "fraudreason": transaction.fraudreason,
+        }
+    ).execute()
+
+    # 2. Update the canonical wallet balance & savings
+    try:
+        amount = float(transaction.amount)
+        balance_delta = 0.0
+        savings_delta = 0.0
+
+        if transaction.category == "top-up":
+            # Top ups add funds, but 10% is auto-saved:
+            #  - 90% goes to the spendable wallet balance
+            #  - 10% goes straight to savings
+            balance_delta = amount * 0.90
+            savings_delta = amount * 0.10
+        elif transaction.category == "save-to-savings":
+            # Moves from wallet to savings: balance down, savings up
+            balance_delta = -amount
+            savings_delta = amount
+        else:
+            # Sends / spending reduce balance, do not affect savings
+            balance_delta = -amount
+
+        # Fetch existing wallet row (if any)
+        wallet_resp = (
+            supabase.table("wallets")
+            .select("*")
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+        wallet = wallet_resp.data or {"balance": 0, "savings": 0}
+
+        new_balance = float(wallet.get("balance", 0) or 0) + balance_delta
+        new_savings = float(wallet.get("savings", 0) or 0) + savings_delta
+
+        # Upsert wallet row
+        supabase.table("wallets").upsert(
+            {
+                "user_id": user_id,
+                "balance": new_balance,
+                "savings": new_savings,
+                "updated_at": datetime.utcnow().isoformat(),
+            },
+            on_conflict="user_id",
+        ).execute()
+
+        # 3. Also reflect savings in leaderboard snapshots so the leaderboard
+        #    stays in sync with the wallet.
+        snap_resp = (
+            supabase.table("leaderboard_snapshots")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("snapshot_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        last = snap_resp.data[0] if snap_resp.data else None
+        new_rank = int(last["rank"]) if last and "rank" in last else 4
+
+        supabase.table("leaderboard_snapshots").insert(
+            {
+                "user_id": user_id,
+                "total_savings": new_savings,
+                "rank": new_rank,
+                "snapshot_date": date.today().isoformat(),
+            }
+        ).execute()
+    except Exception as e:
+        # Don't break the main transaction if the savings snapshot fails;
+        # this is best-effort for the demo.
+        print("Failed to update savings snapshot:", e)
 
     return data.data
 
@@ -205,7 +298,7 @@ async def get_transactions_by_category(user_id: int, category: str):
 
 
 @app.post("/fraud-check")
-async def fraud_check(tx: Transaction):
+async def fraud_check(tx: FraudCheckTransaction):
     score = 0
     reasons = []
 
@@ -263,15 +356,6 @@ async def get_budgets(user_id: int):
     return data.data
 
 
-<<<<<<< HEAD
-=======
-@app.get("/leaderboard/")
-async def get_leaderboard():
-
-    data = supabase.table("leaderboard_snapshots").select("*").execute()
-    return data.data
-
->>>>>>> 80571077145e4dcd77561dd52c98988c7d74a1b6
 @app.put("/budgets/{budget_id}")
 async def update_budget(budget_id: int, limit_amount: float):
 

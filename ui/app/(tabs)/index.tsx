@@ -19,41 +19,24 @@ import { askPurchaseAdvice, createTransaction } from '@/lib/api';
 import { WalletHeader } from '@/components/home/WalletHeader';
 import { BalanceCard } from '@/components/home/BalanceCard';
 import { QuickActions } from '@/components/home/QuickActions';
-import { CampusLocations } from '@/components/home/CampusLocations';
-import { MTACard } from '@/components/home/MTACard';
 import { TransactionList } from '@/components/home/TransactionList';
+import { BudgetPlanning } from '@/components/home/BudgetPlanning';
 import { ChatInput } from '@/components/home/ChatInput';
 
 export default function HomeScreen() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const [amount, setAmount] = useState('');
-  const { data: profile } = useStudentProfile(1);
+
+  // For the hackathon demo we use the seeded student with id = 6.
+  const STUDENT_ID = 6;
+  const { data: profile, reload } = useStudentProfile(STUDENT_ID);
 
   const balance = React.useMemo(() => {
-    if (!profile) return 387.5;
-    const budgets = (profile as any).budgets ?? [];
-    const overall = budgets.find(
-      (b: any) => b.category === 'overall' && b.period === 'weekly',
-    );
-    const limit = overall ? Number(overall.limit_amount ?? 0) : 0;
-
-    const txs = (profile as any).recent_transactions ?? [];
-    const now = new Date();
-    const weekAgo = new Date();
-    weekAgo.setDate(now.getDate() - 7);
-    const spentThisWeek = txs
-      .filter((t: any) => {
-        const created = t.createdat ?? t.created_at;
-        if (!created) return false;
-        return new Date(created) >= weekAgo;
-      })
-      .reduce((sum: number, t: any) => sum + Number(t.amount ?? 0), 0);
-
-    if (limit > 0) {
-      return Math.max(0, limit - spentThisWeek);
-    }
-    return 387.5;
+    const wallet = (profile as any)?.wallet;
+    if (!wallet) return 0;
+    return Number(wallet.balance ?? 0);
   }, [profile]);
 
   const spentThisWeek = React.useMemo(() => {
@@ -66,20 +49,23 @@ export default function HomeScreen() {
       .filter((t: any) => {
         const created = t.createdat ?? t.created_at;
         if (!created) return false;
+        // Only count actual spending, not top ups or moves to savings
+        const category = (t.category ?? '').toString();
+        if (category === 'top-up' || category === 'save-to-savings') return false;
         return new Date(created) >= weekAgo;
       })
       .reduce((sum: number, t: any) => sum + Number(t.amount ?? 0), 0);
   }, [profile]);
 
   const savings = React.useMemo(() => {
-    if (!profile) return 89.2;
-    const snap = (profile as any).leaderboard_position;
-    return snap ? Number(snap.total_savings ?? 0) : 89.2;
+    const wallet = (profile as any)?.wallet;
+    if (!wallet) return 0;
+    return Number(wallet.savings ?? 0);
   }, [profile]);
 
   const handleTopAISend = async (text: string) => {
     try {
-      const advice = await askPurchaseAdvice('1', text);
+      const advice = await askPurchaseAdvice(String(STUDENT_ID), text);
       const title =
         advice.status === 'GO'
           ? 'Looks good ✅'
@@ -100,7 +86,7 @@ export default function HomeScreen() {
     }
   };
 
-  const handleConfirm = async (type: 'Send' | 'Top Up') => {
+  const handleConfirm = async (type: 'Send' | 'Top Up' | 'Save') => {
     if (!amount.trim()) {
       Alert.alert('Enter amount', 'Please enter an amount first.');
       return;
@@ -108,12 +94,25 @@ export default function HomeScreen() {
     const numericAmount = Number(amount);
 
     try {
-      await createTransaction(1, {
+      await createTransaction(STUDENT_ID, {
         amount: numericAmount,
-        category: type === 'Send' ? 'peer-transfer' : 'top-up',
-        merchant: type === 'Send' ? 'Student transfer' : 'Campus top up',
+        category:
+          type === 'Send'
+            ? 'peer-transfer'
+            : type === 'Top Up'
+              ? 'top-up'
+              : 'save-to-savings',
+        merchant:
+          type === 'Send'
+            ? 'Student transfer'
+            : type === 'Top Up'
+              ? 'Campus top up'
+              : 'Savings transfer',
         source: 'app',
       });
+
+      // Reload profile so balance, spending and savings all come back from the DB.
+      reload();
 
       Alert.alert(
         `${type} created`,
@@ -122,6 +121,7 @@ export default function HomeScreen() {
       setAmount('');
       setShowSendModal(false);
       setShowTopUpModal(false);
+      setShowSaveModal(false);
     } catch (err) {
       Alert.alert(
         'Something went wrong',
@@ -140,18 +140,15 @@ export default function HomeScreen() {
       <ParallaxScrollView>
         <ThemedView style={styles.screen}>
           <WalletHeader />
-          <BalanceCard
-            balance={balance}
-            spentThisWeek={spentThisWeek}
-            savings={savings}
-          />
+          <BalanceCard balance={balance} spentThisWeek={spentThisWeek} savings={savings} />
           <QuickActions
             onSend={() => setShowSendModal(true)}
             onTopUp={() => setShowTopUpModal(true)}
+            onSave={() => setShowSaveModal(true)}
           />
-          <CampusLocations />
-          <MTACard />
-          <TransactionList />
+          {/* Budget planning section */}
+          <BudgetPlanning profile={profile} onBudgetUpdated={reload} />
+          <TransactionList transactions={(profile as any)?.recent_transactions ?? []} />
         </ThemedView>
       </ParallaxScrollView>
 
@@ -214,6 +211,40 @@ export default function HomeScreen() {
                   <ThemedText>Cancel</ThemedText>
                 </Pressable>
                 <Pressable onPress={() => handleConfirm('Top Up')} style={styles.primaryButton}>
+                  <ThemedText lightColor="#ffffff" darkColor="#ffffff">
+                    Confirm
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </ThemedView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        animationType="slide"
+        visible={showSaveModal}
+        onRequestClose={() => setShowSaveModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'position' : 'height'}
+            keyboardVerticalOffset={0}>
+            <ThemedView style={styles.modalCard}>
+              <WalletHeader />
+              <ThemedText type="subtitle">Move money to savings</ThemedText>
+              <TextInput
+                style={styles.amountInput}
+                placeholder="$0.00"
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={setAmount}
+              />
+              <View style={styles.modalButtons}>
+                <Pressable onPress={() => setShowSaveModal(false)} style={styles.secondaryButton}>
+                  <ThemedText>Cancel</ThemedText>
+                </Pressable>
+                <Pressable onPress={() => handleConfirm('Save')} style={styles.primaryButton}>
                   <ThemedText lightColor="#ffffff" darkColor="#ffffff">
                     Confirm
                   </ThemedText>

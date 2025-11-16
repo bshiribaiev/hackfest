@@ -10,6 +10,7 @@ class Student(BaseModel):
     major: str 
 
 class Transaction(BaseModel):
+    """Transaction used when creating records in the transactions table."""
     amount: float
     category: str
     merchant: str
@@ -19,7 +20,8 @@ class Transaction(BaseModel):
     fraudreason: Optional[str] = None
 
 
-class Transaction(BaseModel):
+class FraudCheckTransaction(BaseModel):
+    """Lightweight transaction payload for the /fraud-check endpoint."""
     amount: float
     average_amount: float  
     recent_count: int     

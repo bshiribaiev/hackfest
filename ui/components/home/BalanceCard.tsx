@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Pressable, Text } from 'react-native';
+import React from 'react';
+import { StyleSheet, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
@@ -16,8 +16,6 @@ export function BalanceCard({
     spentThisWeek = 127.5,
     savings = 89.2,
 }: BalanceCardProps) {
-    const [showBalance, setShowBalance] = useState(true);
-
     return (
         <ThemedView lightColor="#4f46e5" darkColor="#312e81" style={styles.container}>
             <View style={styles.topRow}>
@@ -28,23 +26,9 @@ export function BalanceCard({
                     </View>
                     <View style={styles.balanceRow}>
                         <Text style={styles.balanceText}>
-                            {showBalance ? `$${balance.toFixed(2)}` : '••••••'}
+                            ${balance.toFixed(2)}
                         </Text>
-                        <Pressable
-                            onPress={() => setShowBalance(!showBalance)}
-                            style={styles.eyeButton}
-                            hitSlop={8}>
-                            <Ionicons
-                                name={showBalance ? 'eye-off-outline' : 'eye-outline'}
-                                size={20}
-                                color="#ddd6fe"
-                            />
-                        </Pressable>
                     </View>
-                </View>
-
-                <View style={styles.badge}>
-                    <ThemedText style={styles.badgeText}>Active</ThemedText>
                 </View>
             </View>
 
@@ -55,10 +39,7 @@ export function BalanceCard({
                 </View>
                 <View style={styles.savingsColumn}>
                     <Text style={styles.footerLabel}>Savings</Text>
-                    <View style={styles.savingsRow}>
-                        <Ionicons name="trending-up-outline" size={14} color="#6ee7b7" />
-                        <Text style={styles.savingsValue}>${savings.toFixed(2)}</Text>
-                    </View>
+                    <Text style={styles.savingsValue}>${savings.toFixed(2)}</Text>
                 </View>
             </View>
         </ThemedView>
@@ -98,26 +79,6 @@ const styles = StyleSheet.create({
         color: '#f0f4ff',
         letterSpacing: -0.5,
     },
-    eyeButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(249,250,251,0.3)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    badge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        backgroundColor: '#22c55e',
-        borderRadius: 999,
-        alignSelf: 'flex-start',
-    },
-    badgeText: {
-        fontSize: 12,
-        color: '#ecfdf3',
-    },
     footerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -137,11 +98,6 @@ const styles = StyleSheet.create({
     },
     savingsColumn: {
         alignItems: 'flex-end',
-    },
-    savingsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
     },
     savingsValue: {
         fontSize: 19,

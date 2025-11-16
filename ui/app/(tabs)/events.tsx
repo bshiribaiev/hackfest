@@ -7,6 +7,7 @@ import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ChatInput } from '@/components/home/ChatInput';
+import { CampusLocations } from '@/components/home/CampusLocations';
 import { askPurchaseAdvice } from '@/lib/api';
 
 type UpcomingEvent = {
@@ -101,7 +102,7 @@ export default function EventsScreen() {
 
   const handleAISend = async (text: string) => {
     try {
-      const advice = await askPurchaseAdvice('1', text);
+      const advice = await askPurchaseAdvice('6', text);
       const title =
         advice.status === 'GO'
           ? 'Looks good ✅'
@@ -208,6 +209,9 @@ export default function EventsScreen() {
               </ThemedText>
             </View>
           </ThemedView>
+
+          {/* Nearby campus locations */}
+          <CampusLocations />
 
           {/* Upcoming events list */}
           <View style={styles.sectionHeaderRow}>

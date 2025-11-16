@@ -8,19 +8,33 @@ import { ThemedView } from '@/components/themed-view';
 type QuickActionsProps = {
     onSend?: () => void;
     onTopUp?: () => void;
+    onSave?: () => void;
 };
 
-export function QuickActions({ onSend, onTopUp }: QuickActionsProps) {
+export function QuickActions({ onSend, onTopUp, onSave }: QuickActionsProps) {
     const actions = [
-        { icon: 'arrow-up-circle-outline' as const, label: 'Send', onPress: onSend },
-        { icon: 'add-circle-outline' as const, label: 'Top Up', onPress: onTopUp },
         {
-            icon: 'qr-code-outline' as const,
-            label: 'Scan QR',
+            icon: 'send-outline' as const,
+            label: 'Send',
+            onPress: onSend,
+            color: '#2563eb', // blue
+        },
+        {
+            icon: 'add-outline' as const,
+            label: 'Top Up',
+            onPress: onTopUp,
+            color: '#10b981', // green
+        },
+        {
+            icon: 'trending-up-outline' as const,
+            label: 'Save',
+            onPress: onSave,
+            color: '#a855f7', // purple
         },
         {
             icon: 'people-outline' as const,
             label: 'Split',
+            color: '#f97316', // orange
         },
     ];
 
@@ -35,7 +49,7 @@ export function QuickActions({ onSend, onTopUp }: QuickActionsProps) {
                     key={action.label}
                     style={styles.action}
                     onPress={() => (action.onPress ? action.onPress() : handleDefaultPress(action.label))}>
-                    <View style={styles.iconWrapper}>
+                    <View style={[styles.iconWrapper, { backgroundColor: action.color }]}>
                         <Ionicons name={action.icon} size={22} color="#ffffff" />
                     </View>
                     <ThemedText style={styles.label}>{action.label}</ThemedText>
@@ -59,8 +73,7 @@ const styles = StyleSheet.create({
     iconWrapper: {
         width: 48,
         height: 48,
-        borderRadius: 16,
-        backgroundColor: '#4f46e5',
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 4,

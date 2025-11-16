@@ -47,7 +47,7 @@ export default function AIScreen() {
 
     try {
       setIsThinking(true);
-      const advice = await askPurchaseAdvice('1', text);
+      const advice = await askPurchaseAdvice('6', text);
 
       const combinedText =
         advice.suggestion && advice.suggestion.trim().length > 0

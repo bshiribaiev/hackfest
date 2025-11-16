@@ -42,6 +42,23 @@ export async function fetchStudentProfile(
   return res.json();
 }
 
+export async function updateBudgetLimit(
+  budgetId: number,
+  limitAmount: number,
+) {
+  const url = new URL(`${API_BASE_URL}/budgets/${budgetId}`);
+  url.searchParams.set('limit_amount', String(limitAmount));
+
+  const res = await fetch(url.toString(), {
+    method: 'PUT',
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to update budget (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function createTransaction(userId: number, payload: any) {
   const url = new URL(`${API_BASE_URL}/transactions/`);
   url.searchParams.set("user_id", String(userId));

@@ -5,22 +5,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
-type Transaction = {
+type UiTransaction = {
     id: number;
     name: string;
-    location: string;
-    date: string;
+    subtitle: string;
     amount: number;
     icon: keyof typeof Ionicons.glyphMap;
     color: string;
 };
 
-const TRANSACTIONS: Transaction[] = [
+const DEMO_TRANSACTIONS: UiTransaction[] = [
     {
         id: 1,
         name: 'Student Cafe',
-        location: 'West Campus',
-        date: 'Today, 2:30 PM',
+        subtitle: 'West Campus · Today, 2:30 PM',
         amount: -8.5,
         icon: 'cafe-outline',
         color: '#fbbf24',
@@ -28,8 +26,7 @@ const TRANSACTIONS: Transaction[] = [
     {
         id: 2,
         name: 'MTA Subway',
-        location: 'Times Square',
-        date: 'Today, 9:00 AM',
+        subtitle: 'Times Square · Today, 9:00 AM',
         amount: -2.9,
         icon: 'train-outline',
         color: '#3b82f6',
@@ -37,8 +34,7 @@ const TRANSACTIONS: Transaction[] = [
     {
         id: 3,
         name: 'Dining Hall',
-        location: 'East Campus',
-        date: 'Yesterday, 7:45 PM',
+        subtitle: 'East Campus · Yesterday, 7:45 PM',
         amount: -12.5,
         icon: 'restaurant-outline',
         color: '#ef4444',
@@ -46,8 +42,7 @@ const TRANSACTIONS: Transaction[] = [
     {
         id: 4,
         name: 'Campus Bookstore',
-        location: 'Main Building',
-        date: 'Nov 13, 2025',
+        subtitle: 'Main Building · Nov 13, 2025',
         amount: -45.99,
         icon: 'book-outline',
         color: '#a855f7',
@@ -55,15 +50,75 @@ const TRANSACTIONS: Transaction[] = [
     {
         id: 5,
         name: 'Split from Sarah',
-        location: 'Lunch payment',
-        date: 'Nov 13, 2025',
+        subtitle: 'Lunch payment · Nov 13, 2025',
         amount: 7.5,
         icon: 'arrow-down-circle-outline',
         color: '#22c55e',
     },
 ];
 
-export function TransactionList() {
+type TransactionListProps = {
+    transactions?: any[] | null;
+};
+
+function mapCategoryToIcon(category: string): {
+    icon: keyof typeof Ionicons.glyphMap;
+    color: string;
+} {
+    const key = category.toLowerCase();
+    if (key.includes('cafe') || key.includes('food') || key.includes('dining')) {
+        return { icon: 'cafe-outline', color: '#fbbf24' };
+    }
+    if (key.includes('subway') || key.includes('transport') || key.includes('metro')) {
+        return { icon: 'train-outline', color: '#3b82f6' };
+    }
+    if (key.includes('book')) {
+        return { icon: 'book-outline', color: '#a855f7' };
+    }
+    if (key.includes('split') || key.includes('transfer')) {
+        return { icon: 'swap-horizontal-outline', color: '#22c55e' };
+    }
+    return { icon: 'card-outline', color: '#6b7280' };
+}
+
+function mapApiTransactions(apiTxs?: any[] | null): UiTransaction[] {
+    if (!apiTxs || !apiTxs.length) return [];
+
+    return apiTxs.map((t, idx) => {
+        const amount = Number(t.amount ?? 0);
+        const merchant = (t.merchant ?? '').toString() || 'Transaction';
+        const category = (t.category ?? '').toString() || 'general';
+
+        const created = t.createdat ?? t.created_at;
+        const when = created ? new Date(created) : null;
+        const dateLabel = when
+            ? when.toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+              })
+            : '';
+
+        const subtitleParts = [category, dateLabel].filter(Boolean);
+
+        const { icon, color } = mapCategoryToIcon(category);
+
+        return {
+            id: Number(t.id ?? idx),
+            name: merchant,
+            subtitle: subtitleParts.join(' · '),
+            amount,
+            icon,
+            color,
+        };
+    });
+}
+
+export function TransactionList({ transactions }: TransactionListProps) {
+    const mapped = mapApiTransactions(transactions);
+    const rows: UiTransaction[] = mapped.length ? mapped.slice(0, 5) : DEMO_TRANSACTIONS;
+
     return (
         <View style={styles.container}>
             <View style={styles.headerRow}>
@@ -76,18 +131,16 @@ export function TransactionList() {
             </View>
 
             <ThemedView style={styles.listCard}>
-                {TRANSACTIONS.map((tx, index) => (
+                {rows.map((tx, index) => (
                     <View
                         key={tx.id}
-                        style={[styles.row, index < TRANSACTIONS.length - 1 && styles.rowDivider]}>
+                        style={[styles.row, index < rows.length - 1 && styles.rowDivider]}>
                         <View style={[styles.iconCircle, { backgroundColor: `${tx.color}22` }]}>
                             <Ionicons name={tx.icon} size={18} color={tx.color} />
                         </View>
                         <View style={styles.infoColumn}>
                             <ThemedText style={styles.name}>{tx.name}</ThemedText>
-                            <ThemedText style={styles.meta}>
-                                {tx.location} · {tx.date}
-                            </ThemedText>
+                            <ThemedText style={styles.meta}>{tx.subtitle}</ThemedText>
                         </View>
                         <ThemedText
                             style={[

@@ -12,6 +12,7 @@ import { Leaderboard } from './components/Leaderboard';
 import { Events } from './components/Events';
 import { SendMoneyModal } from './components/SendMoneyModal';
 import { TopUpModal } from './components/TopUpModal';
+import { WeeklyBudget } from './components/WeeklyBudget';
 import { Toaster } from './components/ui/sonner';
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
                   onSend={() => setShowSendModal(true)}
                   onTopUp={() => setShowTopUpModal(true)}
                 />
+                <WeeklyBudget />
                 <CampusLocations />
                 <MTACard />
                 <TransactionList />

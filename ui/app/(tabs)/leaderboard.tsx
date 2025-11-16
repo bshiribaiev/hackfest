@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
-=======
-import React, { useState, useEffect } from 'react'; // 1. Import useEffect
-import { StyleSheet, View } from 'react-native';
->>>>>>> 80571077145e4dcd77561dd52c98988c7d74a1b6
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -14,13 +9,12 @@ import { ThemedView } from '@/components/themed-view';
 import { ChatInput } from '@/components/home/ChatInput';
 import { askPurchaseAdvice } from '@/lib/api';
 
-// --- Type Definitions for Frontend ---
 
 // Data structure for a single leader row in the UI table
 type Leader = {
   rank: number;
-  name: string; // The name that will be displayed
-  value: string; // e.g., '$245.50', '12 events'
+  name: string;
+  value: string;
   badge: string;
   points?: number;
   isCurrentUser?: boolean;
@@ -49,7 +43,6 @@ type StudentItem = {
 
 type TabKey = 'savings' | 'events' | 'eco';
 
-<<<<<<< HEAD
 const LEADERBOARD_DATA: Record<TabKey, Leader[]> = {
   savings: [
     { rank: 1, name: 'Emma Wilson', value: '$245.50', badge: 'Savings Champion', points: 2450 },
@@ -91,9 +84,6 @@ const LEADERBOARD_DATA: Record<TabKey, Leader[]> = {
     { rank: 3, name: 'Jordan Lee', value: '76 pts', badge: 'Planet Saver', points: 76 },
   ],
 };
-=======
-// --- Helper Functions ---
->>>>>>> 80571077145e4dcd77561dd52c98988c7d74a1b6
 
 function getRankIcon(rank: number) {
   if (rank === 1) return <Ionicons name="trophy" size={18} color="#facc15" />;
@@ -122,15 +112,23 @@ export default function LeaderboardScreen() {
   }, []);
 
   useEffect(() => {
-    // Fetch student data
-    fetch('http://[YOUR_IP]/students/')
+    // Fetch student data (for now we just reuse the same FastAPI host as dev)
+    fetch('http://127.0.0.1:8000/students/')
       .then(response => response.json())
       .then(setStudentData)
       .catch(console.error);
   }, []);
 
   // 4. Function to combine leaderboard data with student names
-  const getLeaderboardWithNames = (data: LeaderboardItem[], students: StudentItem[]): Record<TabKey, Leader[]> => {
+  const getLeaderboardWithNames = (data: LeaderboardItem[] | any, students: StudentItem[] | any): Record<TabKey, Leader[]> => {
+    // If the backend shape isn't what we expect yet, fall back gracefully.
+    if (!Array.isArray(data) || !Array.isArray(students)) {
+      return {
+        savings: [],
+        events: [],
+        eco: [],
+      };
+    }
     const studentsMap = new Map(students.map(s => [s.id, s.name]));
 
     const transformedData: Record<TabKey, Leader[]> = {
@@ -139,31 +137,31 @@ export default function LeaderboardScreen() {
       eco: [],
     };
 
-    data.forEach(item => {
+    (data as LeaderboardItem[]).forEach(item => {
       // Find the student's name using user_id
       const studentName = studentsMap.get(item.user_id) || 'Unknown Student';
-      
+
       const leader: Leader = {
         rank: item.rank,
         name: studentName,
         badge: item.badge,
         // Format the value based on the category (e.g., prepend '$', append ' events'/' pts')
-        value: 
+        value:
           item.category === 'savings' ? `$${item.value.toFixed(2)}` :
-          item.category === 'events' ? `${item.value} events` :
-          item.category === 'eco' ? `${item.value} pts` : 
-          `${item.value}`,
+            item.category === 'events' ? `${item.value} events` :
+              item.category === 'eco' ? `${item.value} pts` :
+                `${item.value}`,
         points: item.category === 'eco' ? item.value : undefined, // Assuming only 'eco' uses points in the UI like this
         isCurrentUser: item.is_current_user,
       };
 
       // Group by category
-      transformedData[item.category].push(leader);
+      transformedData[item.category as TabKey].push(leader);
     });
 
     // Ensure they are sorted by rank, although the backend should handle this
-    Object.keys(transformedData).forEach(key => {
-      transformedData[key as TabKey].sort((a, b) => a.rank - b.rank);
+    (Object.keys(transformedData) as TabKey[]).forEach(key => {
+      transformedData[key].sort((a, b) => a.rank - b.rank);
     });
 
     return transformedData;
@@ -200,7 +198,7 @@ export default function LeaderboardScreen() {
 
   const handleAISend = async (text: string) => {
     try {
-      const advice = await askPurchaseAdvice('1', text);
+      const advice = await askPurchaseAdvice('6', text);
       const title =
         advice.status === 'GO'
           ? 'Looks good ✅'
@@ -269,7 +267,7 @@ export default function LeaderboardScreen() {
               {/* This should be dynamically fetched */}
               <ThemedText style={styles.statValue}>
                 #{leaders.find(l => l.isCurrentUser)?.rank || '-'}
-              </ThemedText> 
+              </ThemedText>
             </ThemedView>
 
             <ThemedView style={styles.statCard}>

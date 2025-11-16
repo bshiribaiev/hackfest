@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Wallet",
-    "slug": "Wallet",
+    "name": "SmartSave",
+    "slug": "smartsave",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "wallet",
+    "scheme": "smartsave",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

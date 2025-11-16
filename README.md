@@ -4,9 +4,9 @@ College students juggle tight budgets, social lives, and campus expenses without
 
 ## What it does
 
-<div style="display: flex; gap: 16px; align-items: flex-start;">
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;">
   <img src="walkthrough.gif" width="280" alt="App walkthrough" />
-  <img src="system-diagram.png" width="550" alt="System diagram" />
+  <img src="system-diagram.png" width="500" alt="System diagram" style="margin-left: auto;" />
 </div>
 
 SmartSave Campus is a mobile app that helps students **spend smarter on campus**:

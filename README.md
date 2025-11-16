@@ -29,7 +29,7 @@ Main app tabs:
 - **Frontend (mobile)**: Built with **React Native** and **Expo**, using TypeScript and a tab-based navigation layout for the core screens (Home, Explore/Spending, Leaderboard, AI, etc.).
 - **UI/UX**: Custom components for cards, lists, and charts designed to feel like a modern banking app but simplified for students (balances, budgets, quick actions).
 - **Backend**: A **Python FastAPI** service that powers API endpoints for transactions, student profiles, events, leaderboard data, and AI interactions.
-- **AI helper**: The AI tab calls backend endpoints that wrap LLM logic to give contextual spending advice and explanations tailored to a student’s recent activity.
+- **AI**: The AI tab calls backend endpoints that wrap LLM - Gemini logic to give contextual spending advice and explanations tailored to a student’s recent activity.
 - **Data layer**: Simple models for users, transactions, budgets, and leaderboard stats; mocked and/or seeded data to make the demo feel realistic.
 - **Tooling**: Expo dev tools for the app, and standard Python tooling (virtualenv, requirements.txt) for the backend.
 

@@ -5,7 +5,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
-export function BalanceCard() {
+type BalanceCardProps = {
+    balance?: number;
+    spentThisWeek?: number;
+    savings?: number;
+};
+
+export function BalanceCard({
+    balance = 387.5,
+    spentThisWeek = 127.5,
+    savings = 89.2,
+}: BalanceCardProps) {
     const [showBalance, setShowBalance] = useState(true);
 
     return (
@@ -18,7 +28,7 @@ export function BalanceCard() {
                     </View>
                     <View style={styles.balanceRow}>
                         <Text style={styles.balanceText}>
-                            {showBalance ? '$387.50' : '••••••'}
+                            {showBalance ? `$${balance.toFixed(2)}` : '••••••'}
                         </Text>
                         <Pressable
                             onPress={() => setShowBalance(!showBalance)}
@@ -41,13 +51,13 @@ export function BalanceCard() {
             <View style={styles.footerRow}>
                 <View>
                     <Text style={styles.footerLabel}>This Week Spent</Text>
-                    <Text style={styles.footerValue}>$127.50</Text>
+                    <Text style={styles.footerValue}>${spentThisWeek.toFixed(2)}</Text>
                 </View>
                 <View style={styles.savingsColumn}>
                     <Text style={styles.footerLabel}>Savings</Text>
                     <View style={styles.savingsRow}>
                         <Ionicons name="trending-up-outline" size={14} color="#6ee7b7" />
-                        <Text style={styles.savingsValue}>$89.20</Text>
+                        <Text style={styles.savingsValue}>${savings.toFixed(2)}</Text>
                     </View>
                 </View>
             </View>

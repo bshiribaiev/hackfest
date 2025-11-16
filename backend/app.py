@@ -1,19 +1,21 @@
 from fastapi import FastAPI, HTTPException
-from typing import Literal
-from datetime import date 
-from decimal import Decimal 
-from supabase import create_client, Client 
+from typing import Literal, Optional
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+
+from supabase import create_client, Client
 from pydantic import BaseModel
-import os 
+import os
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+
 from models import *
 
 load_dotenv()
 
 app = FastAPI()
-supabase: Client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-
+# Use the key name you actually have in your .env (originally SUPABASE_KEY).
+supabase: Client = create_client(
+    os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
 
 @app.post("/students/")
@@ -28,32 +30,40 @@ async def create_student(student: Student):
     }).execute()
     return data.data
 
+
 @app.get("/students/")
 async def get_students():
     data = supabase.table("students").select("*").execute()
     return data.data
 
+
 @app.get("/students/{student_id}")
 async def get_student(student_id: int):
 
-    data = supabase.table("students").select("*").eq("id", student_id).single().execute()
+    data = supabase.table("students").select(
+        "*").eq("id", student_id).single().execute()
     if not data.data:
         raise HTTPException(status_code=404, detail="Student not found ")
     return data.data
 
+
 @app.get("/students/{student_id}/profile")
 async def get_student_profile(student_id: int):
 
-    student_response = supabase.table("students").select("*").eq("id", student_id).single().execute()
+    student_response = supabase.table("students").select(
+        "*").eq("id", student_id).single().execute()
 
     if not student_response.data:
         raise HTTPException(status_code=404, detail="Student not found")
-    
-    budgets_response = supabase.table("budgets").select("*").eq("user_id", student_id).execute()
 
-    transactions_response = supabase.table("transactions").select("*").eq("student_id", student_id).order("createdat", desc=True).limit(20).execute()
+    budgets_response = supabase.table("budgets").select(
+        "*").eq("user_id", student_id).execute()
 
-    leaderboard_response = supabase.table("leaderboard_snapshots").select("*").eq("user_id", student_id).order("snapshot_date", desc=True).limit(1).execute()
+    transactions_response = supabase.table("transactions").select(
+        "*").eq("student_id", student_id).order("createdat", desc=True).limit(20).execute()
+
+    leaderboard_response = supabase.table("leaderboard_snapshots").select(
+        "*").eq("user_id", student_id).order("snapshot_date", desc=True).limit(1).execute()
 
     return {
         "student": student_response.data,
@@ -62,7 +72,103 @@ async def get_student_profile(student_id: int):
         "leaderboard_position": leaderboard_response.data[0] if leaderboard_response.data else None
     }
 
-#transaction endpoints 
+
+class AIAdviceRequest(BaseModel):
+    user_id: int
+    message: str
+    # optional category the question is about; if not provided we look at all budgets
+    category: Optional[str] = None
+
+
+class AIAdviceResponse(BaseModel):
+    status: Literal["GO", "CAREFUL", "NOPE"]
+    message: str
+    suggestion: Optional[str] = None
+
+
+def _summarise_spending(user_id: int, category: Optional[str] = None) -> tuple[float, float]:
+    """
+    Return (total_budget, total_spent_last_7_days) for a user,
+    optionally scoped to a single budget category.
+    """
+    # Fetch budgets for the user
+    budgets_query = supabase.table(
+        "budgets").select("*").eq("user_id", user_id)
+    if category:
+        budgets_query = budgets_query.eq("category", category)
+    budgets_resp = budgets_query.execute()
+    budgets = budgets_resp.data or []
+
+    if not budgets:
+        return 0.0, 0.0
+
+    total_budget = float(
+        sum(Decimal(str(b.get("limit_amount", 0))) for b in budgets))
+
+    # Last 7 days of transactions
+    since = datetime.utcnow() - timedelta(days=7)
+    tx_query = (
+        supabase.table("transactions")
+        .select("*")
+        .eq("student_id", user_id)
+        .gte("createdat", since.isoformat())
+    )
+    if category:
+        tx_query = tx_query.eq("category", category)
+    tx_resp = tx_query.execute()
+    txs = tx_resp.data or []
+
+    total_spent = float(sum(Decimal(str(t.get("amount", 0))) for t in txs))
+    return total_budget, total_spent
+
+
+@app.post("/ai/advice", response_model=AIAdviceResponse)
+async def ai_advice(payload: AIAdviceRequest) -> AIAdviceResponse:
+    """
+    Simple "AI" style advice endpoint that looks at the user's budgets and
+    recent transactions and returns a friendly status + explanation.
+    """
+    total_budget, total_spent = _summarise_spending(
+        user_id=payload.user_id, category=payload.category
+    )
+
+    # No budgets configured
+    if total_budget <= 0:
+        return AIAdviceResponse(
+            status="CAREFUL",
+            message="I couldn't find any budgets set up yet, so I can't judge your spending accurately.",
+            suggestion="Try creating a simple weekly budget for categories like food, transport, and fun money so I can give more precise advice.",
+        )
+
+    ratio = total_spent / total_budget
+
+    if ratio < 0.6:
+        status: Literal["GO", "CAREFUL", "NOPE"] = "GO"
+        msg = (
+            f"You're in good shape: you've used about {ratio:.0%} of your "
+            f"${total_budget:,.0f} budget over the last week."
+        )
+        suggestion = "If you keep this pace you should comfortably stay within your budget."
+    elif ratio < 1.0:
+        status = "CAREFUL"
+        msg = (
+            f"You're getting close to your limit, with about {ratio:.0%} of your "
+            f"${total_budget:,.0f} budget already spent this week."
+        )
+        suggestion = "Consider pausing non‑essential purchases for a few days so you stay on track."
+    else:
+        status = "NOPE"
+        msg = (
+            f"You've spent around {ratio:.0%} of your ${total_budget:,.0f} budget in the last week, "
+            "which is over your current limit."
+        )
+        suggestion = "It might be a good idea to cut back on non‑essential spending for the rest of the week."
+
+    # You can optionally incorporate the user's question into the message if needed.
+    return AIAdviceResponse(status=status, message=msg, suggestion=suggestion)
+
+
+# transaction endpoints
 @app.post("/transactions/")
 async def create_transaction(user_id: int, transaction: Transaction):
 
@@ -79,6 +185,7 @@ async def create_transaction(user_id: int, transaction: Transaction):
 
     return data.data
 
+
 @app.get("/transactions/{user_id}")
 async def get_transactions(user_id: int, limit: int = 50):
 
@@ -87,6 +194,7 @@ async def get_transactions(user_id: int, limit: int = 50):
     ).order("createdat", desc=True).limit(limit).execute()
     return data.data
 
+
 @app.get("/transactions/{user_id}/category/{category}")
 async def get_transactions_by_category(user_id: int, category: str):
 
@@ -94,6 +202,7 @@ async def get_transactions_by_category(user_id: int, category: str):
         "student_id", user_id
     ).eq("category", category).order("createdat", desc=True).execute()
     return data.data
+
 
 @app.post("/fraud-check")
 async def fraud_check(tx: Transaction):
@@ -121,7 +230,9 @@ async def fraud_check(tx: Transaction):
         "reasons": reasons,
     }
 
-#budget endpoints
+# budget endpoints
+
+
 @app.post("/budgets/")
 async def create_budget(user_id: int, budget: Budget):
 
@@ -131,10 +242,10 @@ async def create_budget(user_id: int, budget: Budget):
 
     if existing.data:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Budget already exists for {budget.category} ({budget.period})"
         )
-    
+
     data = supabase.table("budgets").insert({
         "user_id": user_id,
         "category": budget.category,
@@ -143,11 +254,14 @@ async def create_budget(user_id: int, budget: Budget):
     }).execute()
     return data.data
 
+
 @app.get("/budgets/{user_id}")
 async def get_budgets(user_id: int):
 
-    data = supabase.table("budgets").select("*").eq("user_id", user_id).execute()
+    data = supabase.table("budgets").select(
+        "*").eq("user_id", user_id).execute()
     return data.data
+
 
 @app.put("/budgets/{budget_id}")
 async def update_budget(budget_id: int, limit_amount: float):
@@ -157,22 +271,26 @@ async def update_budget(budget_id: int, limit_amount: float):
     }).eq("id", budget_id).execute()
     return data.data
 
+
 @app.delete("/budgets/{budget_id}")
 async def delete_budget(budget_id: int):
 
     data = supabase.table("budgets").delete().eq("id", budget_id).execute()
     return {"message": "Budget deleted successfully"}
 
-#expense tracking endpoints 
+# expense tracking endpoints
+
+
 @app.get("/spending-tracker/{user_id}")
 async def get_spending_tracker(user_id: int):
 
-    budgets_response = supabase.table("budgets").select("*").eq("user_id", user_id).execute()
+    budgets_response = supabase.table("budgets").select(
+        "*").eq("user_id", user_id).execute()
     budgets = budgets_response.data
 
     if not budgets:
         return {"user_id": user_id, "budgets": [], "message": "No budgets found"}
-    
+
     spending_statuses = []
 
     for budget in budgets:
@@ -195,7 +313,8 @@ async def get_spending_tracker(user_id: int):
         spent = sum(float(t['amount']) for t in transactions_response.data)
         budget_limit = float(budget['limit_amount'])
         remaining = budget_limit - spent
-        percentage_used = (spent / budget_limit * 100) if budget_limit > 0 else 0
+        percentage_used = (spent / budget_limit *
+                           100) if budget_limit > 0 else 0
 
         if percentage_used >= 100:
             status = "over"

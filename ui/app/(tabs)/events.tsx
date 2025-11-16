@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -7,6 +7,7 @@ import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ChatInput } from '@/components/home/ChatInput';
+import { askPurchaseAdvice } from '@/lib/api';
 
 type UpcomingEvent = {
   id: number;
@@ -98,11 +99,37 @@ export default function EventsScreen() {
 
   const progress = (eventsProgress.current / eventsProgress.nextMilestone) * 100;
 
+  const handleAISend = async (text: string) => {
+    try {
+      const advice = await askPurchaseAdvice('1', text);
+      const title =
+        advice.status === 'GO'
+          ? 'Looks good ✅'
+          : advice.status === 'CAREFUL'
+            ? 'Be careful ⚠️'
+            : 'Not a great idea 🚫';
+      const body =
+        advice.suggestion && advice.suggestion.trim().length > 0
+          ? `${advice.message}\n\n${advice.suggestion}`
+          : advice.message;
+
+      Alert.alert(title, body);
+    } catch (err) {
+      Alert.alert(
+        'AI unavailable',
+        err instanceof Error ? err.message : 'Please try again in a moment.',
+      );
+    }
+  };
+
   return (
     <ThemedView style={styles.root}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ThemedView style={styles.chatInputWrapper}>
-          <ChatInput />
+          <ChatInput
+            onSend={handleAISend}
+            placeholder="Ask the AI about events or points..."
+          />
         </ThemedView>
       </SafeAreaView>
 

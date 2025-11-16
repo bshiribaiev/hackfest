@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -7,6 +7,7 @@ import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ChatInput } from '@/components/home/ChatInput';
+import { askPurchaseAdvice } from '@/lib/api';
 
 type Leader = {
   rank: number;
@@ -26,7 +27,7 @@ const LEADERBOARD_DATA: Record<TabKey, Leader[]> = {
     { rank: 3, name: 'Sarah Johnson', value: '$167.80', badge: 'Budget Pro', points: 1678 },
     {
       rank: 4,
-      name: 'Alex Smith',
+      name: 'Kevin Smith',
       value: '$89.20',
       badge: 'Rising Star',
       points: 892,
@@ -39,7 +40,7 @@ const LEADERBOARD_DATA: Record<TabKey, Leader[]> = {
     { rank: 2, name: 'Emma Wilson', value: '9 events', badge: 'Social Star', points: 525 },
     {
       rank: 3,
-      name: 'Alex Smith',
+      name: 'Kevin Smith',
       value: '3 events',
       badge: 'Active Member',
       points: 175,
@@ -50,7 +51,7 @@ const LEADERBOARD_DATA: Record<TabKey, Leader[]> = {
   eco: [
     {
       rank: 1,
-      name: 'Alex Smith',
+      name: 'Kevin Smith',
       value: '95 pts',
       badge: 'Eco Warrior',
       points: 95,
@@ -72,11 +73,37 @@ export default function LeaderboardScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('savings');
   const leaders = LEADERBOARD_DATA[activeTab];
 
+  const handleAISend = async (text: string) => {
+    try {
+      const advice = await askPurchaseAdvice('1', text);
+      const title =
+        advice.status === 'GO'
+          ? 'Looks good ✅'
+          : advice.status === 'CAREFUL'
+            ? 'Be careful ⚠️'
+            : 'Not a great idea 🚫';
+      const body =
+        advice.suggestion && advice.suggestion.trim().length > 0
+          ? `${advice.message}\n\n${advice.suggestion}`
+          : advice.message;
+
+      Alert.alert(title, body);
+    } catch (err) {
+      Alert.alert(
+        'AI unavailable',
+        err instanceof Error ? err.message : 'Please try again in a moment.',
+      );
+    }
+  };
+
   return (
     <ThemedView style={styles.root}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ThemedView style={styles.chatInputWrapper}>
-          <ChatInput />
+          <ChatInput
+            onSend={handleAISend}
+            placeholder="Ask the AI how to climb the leaderboard..."
+          />
         </ThemedView>
       </SafeAreaView>
 

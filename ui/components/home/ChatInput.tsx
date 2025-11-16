@@ -4,14 +4,43 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedView } from '@/components/themed-view';
 
-export function ChatInput() {
-    const [value, setValue] = React.useState('');
+type ChatInputProps = {
+    /**
+     * Optional callback for when the user sends a message.
+     * If not provided, a simple "coming soon" alert is shown (used on non-AI tabs).
+     */
+    onSend?: (text: string) => Promise<void> | void;
+    placeholder?: string;
+};
 
-    const handleSend = () => {
+export function ChatInput({ onSend, placeholder }: ChatInputProps) {
+    const [value, setValue] = React.useState('');
+    const [sending, setSending] = React.useState(false);
+
+    const handleSend = async () => {
         if (!value.trim()) return;
-        // Placeholder: wiring to real AI backend will come next
-        Alert.alert('AI Chat (coming soon)', value.trim());
-        setValue('');
+        const text = value.trim();
+
+        if (!onSend) {
+            // Default behaviour for tabs that haven't wired up AI yet.
+            Alert.alert('AI Chat (coming soon)', text);
+            setValue('');
+            return;
+        }
+
+        try {
+            setSending(true);
+            await Promise.resolve(onSend(text));
+            setValue('');
+        } catch (error) {
+            console.error('Failed to send AI message', error);
+            Alert.alert(
+                'Something went wrong',
+                error instanceof Error ? error.message : 'Please try again.',
+            );
+        } finally {
+            setSending(false);
+        }
     };
 
     return (
@@ -20,7 +49,7 @@ export function ChatInput() {
                 <Ionicons name="sparkles-outline" size={18} color="#6b7280" />
                 <TextInput
                     style={styles.input}
-                    placeholder="Ask the AI about your money..."
+                    placeholder={placeholder ?? 'Ask the AI about your money...'}
                     placeholderTextColor="#9ca3af"
                     value={value}
                     onChangeText={setValue}
@@ -29,11 +58,11 @@ export function ChatInput() {
                 />
                 <Pressable
                     onPress={handleSend}
-                    disabled={!value.trim()}
+                    disabled={!value.trim() || sending}
                     style={({ pressed }) => [
                         styles.sendButton,
-                        (!value.trim() || pressed) && styles.sendButtonDisabled,
-                        pressed && value.trim() && styles.sendButtonPressed,
+                        ((!value.trim() || sending) || pressed) && styles.sendButtonDisabled,
+                        pressed && value.trim() && !sending && styles.sendButtonPressed,
                     ]}>
                     <Ionicons name="arrow-up" size={20} color="#ffffff" />
                 </Pressable>

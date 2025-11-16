@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
@@ -11,15 +11,21 @@ export function WalletHeader() {
             <View style={styles.left}>
                 <View style={styles.avatar}>
                     <ThemedText type="defaultSemiBold" style={styles.avatarText}>
-                        AS
+                        KS
                     </ThemedText>
                 </View>
                 <View>
                     <View style={styles.nameRow}>
-                        <ThemedText type="defaultSemiBold">Alex Smith</ThemedText>
-                        <Ionicons name="school" size={16} color="#6366f1" />
+                        <ThemedText type="defaultSemiBold">Kevin Smith</ThemedText>
                     </View>
-                    <ThemedText style={styles.subtitle}>ID: STU-2024-1847</ThemedText>
+                    <View style={styles.subtitleRow}>
+                        <Image
+                            source={require('@/assets/images/rutgers.png')}
+                            style={styles.rutgersImage}
+                            resizeMode="contain"
+                        />
+                        <ThemedText style={styles.subtitle}>ID: STU-2024-1847</ThemedText>
+                    </View>
                 </View>
             </View>
 
@@ -62,6 +68,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+    },
+    subtitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 2,
+    },
+    rutgersImage: {
+        width: 18,
+        height: 18,
     },
     subtitle: {
         fontSize: 12,

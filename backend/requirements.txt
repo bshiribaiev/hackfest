@@ -4,3 +4,4 @@ supabase
 pydantic
 python-dotenv
 google-generativeai
+requests

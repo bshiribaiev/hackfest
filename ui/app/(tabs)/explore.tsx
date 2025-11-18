@@ -94,6 +94,7 @@ export default function TipsScreen() {
     twoWeeksAgo.setDate(now.getDate() - 14);
 
     const isSpendingTx = (t: any) => {
+      if (t.fraudflag) return false;
       const cat = (t.category ?? '').toString();
       return cat !== 'top-up' && cat !== 'save-to-savings';
     };

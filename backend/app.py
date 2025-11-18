@@ -2,10 +2,11 @@ from fastapi import FastAPI, HTTPException
 from typing import Literal, Optional
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+import os
 
+import requests
 from supabase import create_client, Client
 from pydantic import BaseModel
-import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -25,6 +26,54 @@ if GEMINI_API_KEY:
     gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 else:
     gemini_model = None
+
+
+# Email config for fraud alerts using SendGrid's HTTP API.
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+ALERT_EMAIL_FROM = os.getenv("ALERT_EMAIL_FROM")
+ALERT_EMAIL_TO = os.getenv("ALERT_EMAIL_TO")
+
+
+def send_fraud_alert_email(subject: str, body: str, to_email: Optional[str] = None) -> None:
+    """
+    Send a simple plaintext fraud alert email using SendGrid's HTTP API.
+    If configuration is missing, log instead of failing.
+    """
+    recipient = to_email or ALERT_EMAIL_TO
+    if not (SENDGRID_API_KEY and ALERT_EMAIL_FROM and recipient):
+        print("Fraud alert (email not sent – SendGrid not configured):", subject, body)
+        return
+
+    payload = {
+        "personalizations": [
+            {"to": [{"email": recipient}]}
+        ],
+        "from": {"email": ALERT_EMAIL_FROM},
+        "subject": subject,
+        "content": [
+            {"type": "text/plain", "value": body}
+        ],
+    }
+
+    try:
+        resp = requests.post(
+            "https://api.sendgrid.com/v3/mail/send",
+            headers={
+                "Authorization": f"Bearer {SENDGRID_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=10,
+        )
+        if resp.status_code >= 400:
+            print(
+                "SendGrid fraud alert failed:",
+                resp.status_code,
+                resp.text[:300],
+            )
+    except Exception as e:
+        # Don't break the main request flow if email fails.
+        print("Failed to send fraud alert email via SendGrid:", e)
 
 
 @app.post("/students/")
@@ -249,7 +298,8 @@ async def ai_advice(payload: AIAdviceRequest) -> AIAdviceResponse:
         )
         if monthly_resp.data:
             monthly_budget_total = float(
-                monthly_resp.data.get("limit_amount") or 0.0  # type: ignore[attr-defined]
+                # type: ignore[attr-defined]
+                monthly_resp.data.get("limit_amount") or 0.0
             )
     except Exception as e:
         print("Monthly budget lookup failed:", e)
@@ -335,6 +385,9 @@ Write your answer as plain text only – no markdown formatting, no asterisks (*
 @app.post("/transactions/")
 async def create_transaction(user_id: int, transaction: Transaction):
 
+    # Track whether this transaction is considered fraudulent by our simple rule.
+    is_fraudulent = False
+
     # 1. Insert the core transaction record
     data = supabase.table("transactions").insert(
         {
@@ -349,75 +402,139 @@ async def create_transaction(user_id: int, transaction: Transaction):
         }
     ).execute()
 
-    # 2. Update the canonical wallet balance & savings
+    # Simple hard‑coded fraud rule for the hackathon demo:
+    # any outgoing transfer over $500 is flagged and triggers an email alert.
     try:
         amount = float(transaction.amount)
-        balance_delta = 0.0
-        savings_delta = 0.0
+        is_top_up = transaction.category == "top-up"
+        if amount > 500 and not is_top_up:
+            is_fraudulent = True
+            fraud_reason = f"High‑value transaction of ${amount:.2f} flagged for review."
+            print(
+                f"[fraud-rule] user_id={user_id} amount={amount} category={transaction.category} -> FLAGGED"
+            )
+            # Update the just‑created transaction row with fraud details.
+            tx_rows = data.data or []
+            if tx_rows:
+                tx_id = tx_rows[0].get("id")
+                if tx_id is not None:
+                    supabase.table("transactions").update(
+                        {
+                            "fraudflag": True,
+                            "fraudreason": fraud_reason,
+                            "riskscore": 95,
+                        }
+                    ).eq("id", tx_id).execute()
 
-        if transaction.category == "top-up":
-            # Top ups add funds, but 10% is auto-saved:
-            #  - 90% goes to the spendable wallet balance
-            #  - 10% goes straight to savings
-            balance_delta = amount * 0.90
-            savings_delta = amount * 0.10
-        elif transaction.category == "save-to-savings":
-            # Moves from wallet to savings: balance down, savings up
-            balance_delta = -amount
-            savings_delta = amount
-        else:
-            # Sends / spending reduce balance, do not affect savings
-            balance_delta = -amount
+            # Look up the student's email if available.
+            student_email = None
+            try:
+                student_resp = (
+                    supabase.table("students")
+                    .select("email")
+                    .eq("id", user_id)
+                    .single()
+                    .execute()
+                )
+                if student_resp.data:
+                    student_email = student_resp.data.get("email")
+            except Exception as e:
+                print("Failed to look up student email for fraud alert:", e)
 
-        # Fetch existing wallet row (if any)
-        wallet_resp = (
-            supabase.table("wallets")
-            .select("*")
-            .eq("user_id", user_id)
-            .single()
-            .execute()
-        )
-        wallet = wallet_resp.data or {"balance": 0, "savings": 0}
-
-        new_balance = float(wallet.get("balance", 0) or 0) + balance_delta
-        new_savings = float(wallet.get("savings", 0) or 0) + savings_delta
-
-        # Upsert wallet row
-        supabase.table("wallets").upsert(
-            {
-                "user_id": user_id,
-                "balance": new_balance,
-                "savings": new_savings,
-                "updated_at": datetime.utcnow().isoformat(),
-            },
-            on_conflict="user_id",
-        ).execute()
-
-        # 3. Also reflect savings in leaderboard snapshots so the leaderboard
-        #    stays in sync with the wallet.
-        snap_resp = (
-            supabase.table("leaderboard_snapshots")
-            .select("*")
-            .eq("user_id", user_id)
-            .order("snapshot_date", desc=True)
-            .limit(1)
-            .execute()
-        )
-        last = snap_resp.data[0] if snap_resp.data else None
-        new_rank = int(last["rank"]) if last and "rank" in last else 4
-
-        supabase.table("leaderboard_snapshots").insert(
-            {
-                "user_id": user_id,
-                "total_savings": new_savings,
-                "rank": new_rank,
-                "snapshot_date": date.today().isoformat(),
-            }
-        ).execute()
+            subject = "SmartSave – Possible fraudulent activity detected"
+            body = (
+                f"Hi,\n\n"
+                f"A transaction on student account ID {user_id} was flagged for review.\n\n"
+                f"Amount: ${amount:.2f}\n"
+                f"Category: {transaction.category}\n"
+                f"Merchant: {transaction.merchant}\n\n"
+                f"Reason: {fraud_reason}\n\n"
+                f"If you did not authorize this activity, please investigate."
+            )
+            send_fraud_alert_email(subject, body, to_email=student_email)
     except Exception as e:
-        # Don't break the main transaction if the savings snapshot fails;
-        # this is best-effort for the demo.
-        print("Failed to update savings snapshot:", e)
+        print("Fraud rule evaluation failed:", e)
+
+    # 2. Update the canonical wallet balance & savings
+    # If the transaction was flagged as fraud, we skip any balance updates so the
+    # wallet never moves for suspicious activity.
+    if not is_fraudulent:
+        try:
+            amount = float(transaction.amount)
+            balance_delta = 0.0
+            savings_delta = 0.0
+
+            if transaction.category == "top-up":
+                # Top ups add funds, but 10% is auto-saved:
+                #  - 90% goes to the spendable wallet balance
+                #  - 10% goes straight to savings
+                balance_delta = amount * 0.90
+                savings_delta = amount * 0.10
+            elif transaction.category == "save-to-savings":
+                # Moves from wallet to savings: balance down, savings up
+                balance_delta = -amount
+                savings_delta = amount
+            else:
+                # Sends / spending reduce balance, do not affect savings
+                balance_delta = -amount
+
+            # Fetch existing wallet row (if any)
+            wallet_resp = (
+                supabase.table("wallets")
+                .select("*")
+                .eq("user_id", user_id)
+                .single()
+                .execute()
+            )
+            wallet = wallet_resp.data or {"balance": 0, "savings": 0}
+
+            current_balance = float(wallet.get("balance", 0) or 0)
+            new_balance = current_balance + balance_delta
+            new_savings = float(wallet.get("savings", 0) or 0) + savings_delta
+
+            # Ensure the balance never goes negative in the demo.
+            if new_balance < 0:
+                print(
+                    f"[fraud-rule] preventing negative balance: current={current_balance} delta={balance_delta} -> clamped to 0"
+                )
+                new_balance = 0.0
+
+            # Upsert wallet row
+            supabase.table("wallets").upsert(
+                {
+                    "user_id": user_id,
+                    "balance": new_balance,
+                    "savings": new_savings,
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+                on_conflict="user_id",
+            ).execute()
+
+            # 3. Also reflect savings in leaderboard snapshots so the leaderboard
+            #    stays in sync with the wallet.
+            snap_resp = (
+                supabase.table("leaderboard_snapshots")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("snapshot_date", desc=True)
+                .limit(1)
+                .execute()
+            )
+            last = snap_resp.data[0] if snap_resp.data else None
+            new_rank = int(last["rank"]) if last and "rank" in last else 4
+
+            supabase.table("leaderboard_snapshots").insert(
+                {
+                    "user_id": user_id,
+                    "total_savings": new_savings,
+                    "rank": new_rank,
+                    "snapshot_date": date.today().isoformat(),
+                }
+            ).execute()
+        except Exception as e:
+            # Don't break the main transaction if the savings snapshot fails;
+            # this is best-effort for the demo.
+            print("Failed to update savings snapshot:", e)
 
     return data.data
 

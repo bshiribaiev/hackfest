@@ -54,7 +54,8 @@ export default function HomeScreen() {
       .filter((t: any) => {
         const created = t.createdat ?? t.created_at;
         if (!created) return false;
-        // Only count actual spending, not top ups or moves to savings
+        // Only count actual, non-fraud spending, not top ups or moves to savings
+        if (t.fraudflag) return false;
         const category = (t.category ?? '').toString();
         if (category === 'top-up' || category === 'save-to-savings') return false;
         return new Date(created) >= weekAgo;
@@ -118,10 +119,15 @@ export default function HomeScreen() {
       // Reload profile so balance, spending and savings all come back from the DB.
       reload();
 
-      Alert.alert(
-        `${type} created`,
-        `${type} of $${numericAmount.toFixed(2)} recorded.`,
-      );
+      const isPotentialFraud = type === 'Send' && numericAmount > 500;
+      const title = isPotentialFraud ? 'Send flagged' : `${type} created`;
+      const body = isPotentialFraud
+        ? `This send of $${numericAmount.toFixed(
+          2,
+        )} looks suspicious, so we’ve flagged it for review and left your balance unchanged.`
+        : `${type} of $${numericAmount.toFixed(2)} recorded.`;
+
+      Alert.alert(title, body);
       setAmount('');
       setRecipient(null);
       setShowSendModal(false);
